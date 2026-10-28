@@ -1,0 +1,854 @@
+version: 2
+models:
+- name: hub_order
+  columns:
+  - name: order_hk
+    tests:
+    - unique
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: record_source
+    tests:
+    - not_null
+  description: 'Заказ: ключи из всех четырех источников с order_id, без join источников.'
+- name: hub_customer
+  columns:
+  - name: customer_hk
+    tests:
+    - unique
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: record_source
+    tests:
+    - not_null
+  description: Покупатель по customer_unique_id. Не смешивается с customer_id профиля.
+- name: hub_customer_profile
+  columns:
+  - name: customer_profile_hk
+    tests:
+    - unique
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: record_source
+    tests:
+    - not_null
+  description: Профиль и адрес заказа по customer_id; ключи из customers и orders.
+- name: hub_product
+  columns:
+  - name: product_hk
+    tests:
+    - unique
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: record_source
+    tests:
+    - not_null
+  description: Уникальные бизнес-ключи, первая встреча во всей истории.
+- name: hub_seller
+  columns:
+  - name: seller_hk
+    tests:
+    - unique
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: record_source
+    tests:
+    - not_null
+  description: Уникальные бизнес-ключи, первая встреча во всей истории.
+- name: hub_category
+  columns:
+  - name: category_hk
+    tests:
+    - unique
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: record_source
+    tests:
+    - not_null
+  description: Категория PT из products и translation, включая нулевого члена.
+- name: hub_review
+  columns:
+  - name: review_hk
+    tests:
+    - unique
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: record_source
+    tests:
+    - not_null
+  description: Уникальные бизнес-ключи, первая встреча во всей истории.
+- name: link_order_profile
+  columns:
+  - name: order_profile_hk
+    tests:
+    - unique
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: order_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_order')
+          field: order_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: customer_profile_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_customer_profile')
+          field: customer_profile_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  description: Уникальная связь ключей из одной таблицы источника.
+- name: link_customer_profile
+  columns:
+  - name: customer_profile_lhk
+    tests:
+    - unique
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: customer_profile_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_customer_profile')
+          field: customer_profile_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: customer_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_customer')
+          field: customer_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  description: Уникальная связь ключей из одной таблицы источника.
+- name: link_order_item
+  columns:
+  - name: order_item_hk
+    tests:
+    - unique
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: order_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_order')
+          field: order_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: product_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_product')
+          field: product_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: seller_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_seller')
+          field: seller_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  description: 'Позиция: order × product × seller × dependent order_item_id.'
+- name: link_product_category
+  columns:
+  - name: product_category_hk
+    tests:
+    - unique
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: product_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_product')
+          field: product_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: category_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_category')
+          field: category_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  description: Уникальная связь ключей из одной таблицы источника.
+- name: link_order_review
+  columns:
+  - name: order_review_hk
+    tests:
+    - unique
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: order_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_order')
+          field: order_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: review_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_review')
+          field: review_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  description: Уникальная связь ключей из одной таблицы источника.
+- name: sat_order
+  columns:
+  - name: order_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_order')
+          field: order_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: order_hashdiff
+    tests:
+    - not_null
+    description: MD5 атрибутов в фиксированном порядке; null → пустая строка.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - order_hk
+        - load_dts
+  description: Известные при оформлении даты покупки и обещанной доставки.
+- name: sat_order_status
+  columns:
+  - name: order_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_order')
+          field: order_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: order_status_hashdiff
+    tests:
+    - not_null
+    description: MD5 атрибутов в фиксированном порядке; null → пустая строка.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - order_hk
+        - load_dts
+  description: Изменяемый статус и даты исполнения заказа, отдельно от sat_order.
+- name: sat_order_item
+  columns:
+  - name: order_item_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('link_order_item')
+          field: order_item_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: order_item_hashdiff
+    tests:
+    - not_null
+    description: MD5 атрибутов в фиксированном порядке; null → пустая строка.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - order_item_hk
+        - load_dts
+  description: 'История атрибутов: только смены hashdiff, insert-only.'
+- name: sat_customer_profile
+  columns:
+  - name: customer_profile_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_customer_profile')
+          field: customer_profile_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: customer_profile_hashdiff
+    tests:
+    - not_null
+    description: MD5 атрибутов в фиксированном порядке; null → пустая строка.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - customer_profile_hk
+        - load_dts
+  description: 'История атрибутов: только смены hashdiff, insert-only.'
+- name: sat_product
+  columns:
+  - name: product_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_product')
+          field: product_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: product_hashdiff
+    tests:
+    - not_null
+    description: MD5 атрибутов в фиксированном порядке; null → пустая строка.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - product_hk
+        - load_dts
+  description: 'История атрибутов: только смены hashdiff, insert-only.'
+- name: sat_seller
+  columns:
+  - name: seller_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_seller')
+          field: seller_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: seller_hashdiff
+    tests:
+    - not_null
+    description: MD5 атрибутов в фиксированном порядке; null → пустая строка.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - seller_hk
+        - load_dts
+  description: 'История атрибутов: только смены hashdiff, insert-only.'
+- name: sat_category
+  columns:
+  - name: category_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_category')
+          field: category_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: category_hashdiff
+    tests:
+    - not_null
+    description: MD5 атрибутов в фиксированном порядке; null → пустая строка.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - category_hk
+        - load_dts
+  description: 'История атрибутов: только смены hashdiff, insert-only.'
+- name: sat_review
+  columns:
+  - name: review_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_review')
+          field: review_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: review_hashdiff
+    tests:
+    - not_null
+    description: MD5 атрибутов в фиксированном порядке; null → пустая строка.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - review_hk
+        - load_dts
+  description: Атрибуты на hub_review; M:N связь с заказами отдельно в link_order_review.
+- name: sat_order_payment
+  columns:
+  - name: order_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_order')
+          field: order_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: payment_hashdiff
+    tests:
+    - not_null
+    description: MD5 атрибутов в фиксированном порядке; null → пустая строка.
+  - name: payment_sequential
+    tests:
+    - not_null
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - order_hk
+        - load_dts
+        - payment_sequential
+  description: 'Multi-active: полный упорядоченный набор оплат родителя на каждую смену набора.'
+- name: stg_orders__keys
+  columns:
+  - name: order_hk
+    tests:
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  description: Жесткие правила и полная raw-история; строки не фильтруются.
+- name: rts_order
+  columns:
+  - name: order_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_order')
+          field: order_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - order_hk
+        - load_dts
+  description: 'Присутствие ключа в полном снимке источника: ключ × load_dts.'
+- name: eff_order
+  columns:
+  - name: order_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_order')
+          field: order_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - order_hk
+        - load_dts
+  description: Только смены is_deleted по последовательности полных снимков.
+- name: stg_order_items__keys
+  columns:
+  - name: order_item_hk
+    tests:
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  description: Жесткие правила и полная raw-история; строки не фильтруются.
+- name: rts_order_item
+  columns:
+  - name: order_item_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('link_order_item')
+          field: order_item_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - order_item_hk
+        - load_dts
+  description: 'Присутствие ключа в полном снимке источника: ключ × load_dts.'
+- name: eff_order_item
+  columns:
+  - name: order_item_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('link_order_item')
+          field: order_item_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - order_item_hk
+        - load_dts
+  description: Только смены is_deleted по последовательности полных снимков.
+- name: stg_products__keys
+  columns:
+  - name: product_hk
+    tests:
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  description: Жесткие правила и полная raw-история; строки не фильтруются.
+- name: rts_product
+  columns:
+  - name: product_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_product')
+          field: product_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - product_hk
+        - load_dts
+  description: 'Присутствие ключа в полном снимке источника: ключ × load_dts.'
+- name: eff_product
+  columns:
+  - name: product_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_product')
+          field: product_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - product_hk
+        - load_dts
+  description: Только смены is_deleted по последовательности полных снимков.
+- name: stg_sellers__keys
+  columns:
+  - name: seller_hk
+    tests:
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  description: Жесткие правила и полная raw-история; строки не фильтруются.
+- name: rts_seller
+  columns:
+  - name: seller_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_seller')
+          field: seller_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - seller_hk
+        - load_dts
+  description: 'Присутствие ключа в полном снимке источника: ключ × load_dts.'
+- name: eff_seller
+  columns:
+  - name: seller_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_seller')
+          field: seller_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - seller_hk
+        - load_dts
+  description: Только смены is_deleted по последовательности полных снимков.
+- name: stg_order_reviews__keys
+  columns:
+  - name: review_hk
+    tests:
+    - not_null
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  description: Жесткие правила и полная raw-история; строки не фильтруются.
+- name: rts_review
+  columns:
+  - name: review_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_review')
+          field: review_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - review_hk
+        - load_dts
+  description: 'Присутствие ключа в полном снимке источника: ключ × load_dts.'
+- name: eff_review
+  columns:
+  - name: review_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_review')
+          field: review_hk
+    description: MD5 hex char(32); upper(trim(BK)), составной ключ через ||, все пустые → 32 нуля.
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - review_hk
+        - load_dts
+  description: Только смены is_deleted по последовательности полных снимков.
+- name: stg_orders
+  columns:
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: batch_id
+    tests:
+    - not_null
+    description: 'raw._batch_id: идентификатор EL-батча для сверок и err_cast.'
+  description: Жесткие правила и полная raw-история; строки не фильтруются.
+- name: stg_order_items
+  columns:
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: batch_id
+    tests:
+    - not_null
+    description: 'raw._batch_id: идентификатор EL-батча для сверок и err_cast.'
+  description: Жесткие правила и полная raw-история; строки не фильтруются.
+- name: stg_order_payments
+  columns:
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: batch_id
+    tests:
+    - not_null
+    description: 'raw._batch_id: идентификатор EL-батча для сверок и err_cast.'
+  description: Жесткие правила и полная raw-история; строки не фильтруются.
+- name: stg_order_reviews
+  columns:
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: batch_id
+    tests:
+    - not_null
+    description: 'raw._batch_id: идентификатор EL-батча для сверок и err_cast.'
+  description: Жесткие правила и полная raw-история; строки не фильтруются.
+- name: stg_products
+  columns:
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: batch_id
+    tests:
+    - not_null
+    description: 'raw._batch_id: идентификатор EL-батча для сверок и err_cast.'
+  description: Жесткие правила и полная raw-история; строки не фильтруются.
+- name: stg_sellers
+  columns:
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: batch_id
+    tests:
+    - not_null
+    description: 'raw._batch_id: идентификатор EL-батча для сверок и err_cast.'
+  description: Жесткие правила и полная raw-история; строки не фильтруются.
+- name: stg_customers
+  columns:
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: batch_id
+    tests:
+    - not_null
+    description: 'raw._batch_id: идентификатор EL-батча для сверок и err_cast.'
+  description: Жесткие правила и полная raw-история; строки не фильтруются.
+- name: stg_product_category_translation
+  columns:
+  - name: load_dts
+    tests:
+    - not_null
+    description: 'Момент прихода батча в DWH: raw._extracted_at, не часы источника.'
+  - name: batch_id
+    tests:
+    - not_null
+    description: 'raw._batch_id: идентификатор EL-батча для сверок и err_cast.'
+  description: Жесткие правила и полная raw-история; строки не фильтруются.
+- name: eff_product_category
+  description: 'История связи категории с driving product BK: деактивация прежнего link и активация нового, включая
+    A→B→A. Удаление самого продукта задает eff_product.'
+  columns:
+  - name: product_category_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('link_product_category')
+          field: product_category_hk
+  - name: product_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_product')
+          field: product_hk
+  - name: category_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_category')
+          field: category_hk
+  - name: is_deleted
+    tests:
+    - not_null
+  - name: load_dts
+    tests:
+    - not_null
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - product_category_hk
+        - load_dts

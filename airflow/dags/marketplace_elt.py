@@ -1,18 +1,21 @@
-"""ELT маркетплейса: OLTP -> Cloudberry raw -> dbt.
-Core / марты / ML / загрузка в ClickHouse — добавятся после моделирования."""
+"""ELT маркетплейса: source → DWH raw → dbt staging / ODS и тесты.
 
-from datetime import datetime, timedelta
+Один батч на все таблицы; dbt build подхватывает весь граф моделей.
+DDS / марты / ML / загрузка в ClickHouse — следующие этапы.
+"""
+
+from datetime import datetime, timedelta, timezone
 
 from airflow.providers.standard.operators.bash import BashOperator
-from airflow.sdk import dag, task
+from airflow.sdk import dag, get_current_context, task
 
-from pipelines.oltp_to_raw import TABLES
+from pipelines.source_to_raw import TABLES
 
 DBT = "cd /opt/project/dbt && dbt"
 
 
 @dag(
-    schedule="@hourly",
+    schedule="@daily",
     start_date=datetime(2026, 1, 1),
     catchup=False,
     max_active_runs=1,
@@ -21,14 +24,24 @@ DBT = "cd /opt/project/dbt && dbt"
 )
 def marketplace_elt():
     @task
-    def extract_load(table: str) -> int:
-        from pipelines.oltp_to_raw import load_table
+    def open_batch() -> dict:
+        return {
+            "batch_id": get_current_context()["run_id"],
+            "extracted_at": datetime.now(timezone.utc).isoformat(),
+        }
 
-        return load_table(table)
+    @task
+    def extract_load(table: str, batch: dict) -> dict:
+        from pipelines.source_to_raw import load_table
+
+        return load_table(
+            table, batch["batch_id"], datetime.fromisoformat(batch["extracted_at"])
+        )
 
     dbt_build = BashOperator(task_id="dbt_build", bash_command=f"{DBT} build")
 
-    extract_load.expand(table=list(TABLES)) >> dbt_build
+    batch = open_batch()
+    extract_load.partial(batch=batch).expand(table=list(TABLES)) >> dbt_build
 
 
 marketplace_elt()

@@ -3,7 +3,7 @@ DC := docker compose
 -include .env
 export
 
-.PHONY: env up down nuke ps data seed tick run dbt psql-source psql-dwh psql-analyst ch logs
+.PHONY: env up down nuke ps data seed el run dbt psql-source psql-dwh psql-analyst ch logs
 
 env:            ## сгенерировать .env со случайными паролями (если его нет)
 	@test -f .env || ./scripts/gen_env.sh
@@ -27,8 +27,8 @@ data:           ## скачать CSV Olist
 seed: data      ## залить CSV Olist в source.raw (идемпотентно, TRUNCATE+COPY)
 	$(DC) exec airflow python /opt/project/scripts/load_raw.py
 
-tick:           ## один "тик" живого трафика
-	$(DC) exec airflow python /opt/project/oltp/seed.py tick
+el:             ## один батч EL вручную
+	$(DC) exec airflow python -m pipelines.source_to_raw
 
 run:            ## запустить ELT целиком
 	$(DC) exec airflow airflow dags unpause marketplace_elt
@@ -40,7 +40,7 @@ dbt:            ## make dbt ARGS="build -s +sales_wide"
 psql-source:    ## источник (raw организаторов)
 	$(DC) exec source psql -U hack -d marketplace
 
-psql-dwh:       ## gpadmin
+psql-dwh:       ## владелец DWH
 	$(DC) run --rm --entrypoint psql dwh-init
 
 psql-analyst:   ## под ролью аналитика — для демо разграничения PII
