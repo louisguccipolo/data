@@ -1,0 +1,23 @@
+services:
+  superset:
+    build: ./infra/superset
+    environment:
+      SUPERSET_CONFIG_PATH: /app/config/superset_config.py
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+      DWH_ANALYST_PASSWORD: ${DWH_ANALYST_PASSWORD}
+    ports:
+      - '127.0.0.1:18088:8088'
+    volumes:
+      - superset-data:/app/superset_home
+      - ./infra/superset:/app/config:ro
+    command: >-
+      sh -c 'superset db upgrade &&
+      python /app/config/bootstrap.py &&
+      superset init &&
+      gunicorn --bind 0.0.0.0:8088 --workers 2 --timeout 120 "superset.app:create_app()"'
+    depends_on:
+      dwh: {condition: service_healthy}
+    restart: unless-stopped
+volumes:
+  superset-data:
