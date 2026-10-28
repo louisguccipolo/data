@@ -1,0 +1,11 @@
+<clickhouse>
+    <named_collections>
+        <dwh>
+            <host>dwh</host>
+            <port>5432</port>
+            <database>dwh</database>
+            <user>ch_reader</user>
+            <password from_env="CH_READER_PASSWORD"/>
+        </dwh>
+    </named_collections>
+</clickhouse>

@@ -1,0 +1,25 @@
+name: marketplace
+version: "1.0.0"
+config-version: 2
+profile: marketplace
+
+model-paths: ["models"]
+snapshot-paths: ["snapshots"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+vars:
+  pii_salt: "{{ env_var('PII_SALT', 'dev-salt') }}"
+
+# Кастомные ключи для Cloudberry (см. macros/cloudberry_create_table_as.sql):
+#   distributed_by: '<col>' | 'randomly' | 'replicated'
+#   storage:        параметры WITH (...)
+models:
+  marketplace:
+    staging:
+      +schema: stg
+      +materialized: view
+
+snapshots:
+  marketplace:
+    +schema: snapshots
