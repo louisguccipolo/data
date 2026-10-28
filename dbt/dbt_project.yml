@@ -7,6 +7,8 @@ model-paths: ["models"]
 snapshot-paths: ["snapshots"]
 macro-paths: ["macros"]
 test-paths: ["tests"]
+# В контейнере пакеты лежат вне bind-mount репозитория.
+packages-install-path: "{{ env_var('DBT_PACKAGES_INSTALL_PATH', 'dbt_packages') }}"
 
 vars:
   pii_salt: "{{ env_var('PII_SALT', 'dev-salt') }}"

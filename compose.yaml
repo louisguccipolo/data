@@ -106,6 +106,8 @@ services:
   airflow:
     build:
       context: ./infra/airflow
+      additional_contexts:
+        dbt: ./dbt
     image: mp-airflow:3.3.0
     command: standalone
     user: "${AIRFLOW_UID:-50000}:0"
