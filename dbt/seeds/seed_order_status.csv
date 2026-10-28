@@ -1,0 +1,9 @@
+order_status,status_group,is_revenue
+delivered,выручка,true
+created,в процессе,false
+approved,в процессе,false
+invoiced,в процессе,false
+processing,в процессе,false
+shipped,в процессе,false
+canceled,отмена,false
+unavailable,отмена,false

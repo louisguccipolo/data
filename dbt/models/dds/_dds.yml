@@ -1,0 +1,422 @@
+version: 2
+models:
+- name: dim_customer
+  description: Постоянный покупатель по customer_unique_id, одна версия от хаба; когорта
+    и число активных заказов на срезе.
+  columns:
+  - name: customer_sk
+    tests:
+    - unique
+    - not_null
+  - name: customer_hk
+    tests:
+    - not_null
+  - name: valid_from
+    tests:
+    - not_null
+  - name: valid_to
+    tests:
+    - not_null
+  - name: is_current
+    tests:
+    - not_null
+  - name: is_deleted
+    tests:
+    - not_null
+  - name: is_incomplete
+    tests:
+    - not_null
+  - name: is_unknown
+    tests:
+    - not_null
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - customer_hk
+        - valid_from
+- name: dim_seller
+  description: SCD2 адреса, региона, неполноты и удаления продавца по времени наблюдения
+    ODS.
+  columns:
+  - name: seller_sk
+    tests:
+    - unique
+    - not_null
+  - name: seller_hk
+    tests:
+    - not_null
+  - name: valid_from
+    tests:
+    - not_null
+  - name: valid_to
+    tests:
+    - not_null
+  - name: is_current
+    tests:
+    - not_null
+  - name: is_deleted
+    tests:
+    - not_null
+  - name: is_incomplete
+    tests:
+    - not_null
+  - name: is_unknown
+    tests:
+    - not_null
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - seller_hk
+        - valid_from
+- name: dim_product
+  description: SCD2 характеристик товара, категории PT/EN, позднего перевода, неполноты
+    и удаления.
+  columns:
+  - name: product_sk
+    tests:
+    - unique
+    - not_null
+  - name: product_hk
+    tests:
+    - not_null
+  - name: valid_from
+    tests:
+    - not_null
+  - name: valid_to
+    tests:
+    - not_null
+  - name: is_current
+    tests:
+    - not_null
+  - name: is_deleted
+    tests:
+    - not_null
+  - name: is_incomplete
+    tests:
+    - not_null
+  - name: is_unknown
+    tests:
+    - not_null
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - product_hk
+        - valid_from
+- name: dim_order_status
+  description: 'Seed статусов: delivered — выручка; прочие — в процессе или отмена;
+    отдельный Unknown.'
+  columns:
+  - name: order_status_sk
+    tests:
+    - unique
+    - not_null
+  - name: order_status_hk
+    tests:
+    - not_null
+  - name: valid_from
+    tests:
+    - not_null
+  - name: valid_to
+    tests:
+    - not_null
+  - name: is_current
+    tests:
+    - not_null
+  - name: is_deleted
+    tests:
+    - not_null
+  - name: is_incomplete
+    tests:
+    - not_null
+  - name: is_unknown
+    tests:
+    - not_null
+  - name: order_status
+    tests:
+    - unique
+    - not_null
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - order_status_hk
+        - valid_from
+- name: dim_payment_type
+  description: Seed способов оплаты; not_defined — обычный член, отличный от Unknown.
+  columns:
+  - name: payment_type_sk
+    tests:
+    - unique
+    - not_null
+  - name: payment_type_hk
+    tests:
+    - not_null
+  - name: valid_from
+    tests:
+    - not_null
+  - name: valid_to
+    tests:
+    - not_null
+  - name: is_current
+    tests:
+    - not_null
+  - name: is_deleted
+    tests:
+    - not_null
+  - name: is_incomplete
+    tests:
+    - not_null
+  - name: is_unknown
+    tests:
+    - not_null
+  - name: payment_type
+    tests:
+    - unique
+    - not_null
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - payment_type_hk
+        - valid_from
+- name: dim_geo
+  description: 27 штатов Бразилии и пять регионов; сопоставление штата через upper(trim(state));
+    отдельный Unknown.
+  columns:
+  - name: geo_sk
+    tests:
+    - unique
+    - not_null
+  - name: geo_hk
+    tests:
+    - not_null
+  - name: valid_from
+    tests:
+    - not_null
+  - name: valid_to
+    tests:
+    - not_null
+  - name: is_current
+    tests:
+    - not_null
+  - name: is_deleted
+    tests:
+    - not_null
+  - name: is_incomplete
+    tests:
+    - not_null
+  - name: is_unknown
+    tests:
+    - not_null
+  - name: state_code
+    tests:
+    - unique
+    - not_null
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - geo_hk
+        - valid_from
+- name: dim_date
+  description: Полные календарные годы дат заказов; Unknown date_key = -1.
+  columns:
+  - name: date_key
+    tests:
+    - unique
+    - not_null
+- name: fct_order
+  description: Один заказ, включая заказы без позиций; география по действующему профилю,
+    предагрегаты активных дочерних строк.
+  columns:
+  - name: order_hk
+    tests:
+    - not_null
+    - unique
+  - name: is_deleted
+    tests:
+    - not_null
+  - name: order_purchase_date_key
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_date')
+          field: date_key
+  - name: customer_sk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_customer')
+          field: customer_sk
+  - name: order_status
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_order_status')
+          field: order_status
+- name: fct_order_item
+  description: Одна позиция order_id × order_item_id; выбранная связь и текущие на
+    срезе product/seller SK.
+  columns:
+  - name: order_id
+    tests:
+    - not_null
+  - name: order_item_id
+    tests:
+    - not_null
+  - name: is_deleted
+    tests:
+    - not_null
+  - name: order_purchase_date_key
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_date')
+          field: date_key
+  - name: product_sk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_product')
+          field: product_sk
+  - name: seller_sk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_seller')
+          field: seller_sk
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - order_id
+        - order_item_id
+- name: fct_payment
+  description: Все наблюдавшиеся payment_sequential заказа; исчезнувший из последнего
+    полного набора платёж сохранён как удалённый.
+  columns:
+  - name: order_hk
+    tests:
+    - not_null
+  - name: payment_sequential
+    tests:
+    - not_null
+  - name: is_deleted
+    tests:
+    - not_null
+  - name: order_purchase_date_key
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_date')
+          field: date_key
+  - name: payment_type
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_payment_type')
+          field: payment_type
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - order_hk
+        - payment_sequential
+- name: fct_review
+  description: Одна связь review_hk × order_hk, признаки комментариев и время ответа;
+    удаление наследуется от отзыва.
+  columns:
+  - name: review_hk
+    tests:
+    - not_null
+  - name: order_hk
+    tests:
+    - not_null
+  - name: is_deleted
+    tests:
+    - not_null
+  - name: order_purchase_date_key
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_date')
+          field: date_key
+  - name: review_creation_date_key
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_date')
+          field: date_key
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - review_hk
+        - order_hk
+- name: int_as_of
+  description: 'Единая отсечка: var as_of_dts либо максимум load_dts всех incremental
+    ODS.'
+  columns:
+  - name: as_of_dts
+    tests:
+    - not_null
+- name: build_info
+  description: Метаданные публикации; время и invocation меняются при каждой сборке.
+  columns:
+  - name: as_of_dts
+    tests:
+    - not_null
+  - name: built_at
+    tests:
+    - not_null
+  - name: dbt_invocation_id
+    tests:
+    - not_null
+- name: int_order_on_slice
+  description: Хаб заказа и последние на срезе даты, статус и entity effectivity.
+- name: int_order_profile_on_slice
+  description: Активные на срезе связи заказ → профиль → постоянный покупатель и последняя
+    география профиля.
+- name: int_order_item_candidates
+  description: Все связи позиции, известные на срезе, с последними атрибутами, eff
+    и приоритетом выбора.
+- name: int_order_item_on_slice
+  description: 'Одна выбранная связь позиции: active, иначе без eff, иначе последнее
+    удаление; ничья по HK.'
+- name: int_payment_on_slice
+  description: Последние атрибуты каждого наблюдавшегося платежа; активность по последнему
+    полному набору заказа.
+- name: int_product_versions
+  description: Состояния товара во всех точках изменения ODS до схлопывания одинаковых
+    соседних наборов атрибутов.
+- name: int_seller_versions
+  description: Состояния продавца во всех точках изменения ODS до схлопывания одинаковых
+    соседних наборов атрибутов.
+- name: fct_order__active
+  description: 'Активные строки базового факта: where not is_deleted.'
+- name: fct_order_item__active
+  description: 'Активные строки базового факта: where not is_deleted.'
+- name: fct_payment__active
+  description: 'Активные строки базового факта: where not is_deleted.'
+- name: fct_review__active
+  description: 'Активные строки базового факта: where not is_deleted.'
+seeds:
+- name: seed_order_status
+  description: Согласованные группы статусов и признак выручки.
+- name: seed_payment_type
+  description: Коды и отображаемые названия способов оплаты.
+- name: seed_br_state
+  description: Штаты Бразилии, их названия и регионы.

@@ -1,0 +1,6 @@
+payment_type,payment_type_name
+credit_card,Кредитная карта
+boleto,Банковская квитанция
+voucher,Ваучер
+debit_card,Дебетовая карта
+not_defined,Не определён источником
