@@ -2,7 +2,7 @@
 
 > Хакатон: 1 день, 09:00–21:00.
 > Статус: v2 от 28.10.2026 — после разбора кейса, записи брифинга и согласования архитектуры с техническим экспертом (Data Vault одобрен).
-> Моделирование ещё не начато; стенд поднят (§13). Ключи и конвенции vault согласованы (§6), открытые вопросы — §18.
+> Staging и ODS реализованы и собраны на Olist (28.10): 249/249 моделей и проверок успешно; DDS и mart — следующие этапы. Результаты и ограничения upstream: `.plans/ods-implementation.md`. Стенд поднят (§13), открытые вопросы — §18.
 
 ---
 
@@ -89,8 +89,8 @@
 - `raw` в DWH — **append-only**. Служебные колонки: `_src_loaded_at` (это `_loaded_at` источника, переименован — своё имя занято бы дважды), `_batch_id` (`run_id` Airflow), `_extracted_at`; под CDC заранее nullable `_op`, `_lsn`, `_commit_ts` — при переходе `raw` остаётся той же таблицей. Дедупликация и история — в `ods` через hashdiff сателлитов.
 - **Снимок ключей.** На каждом прогоне EL дополнительно выгружает **все** бизнес-ключи таблицы в `raw.<таблица>__keys` (ключ, `_batch_id`, `_extracted_at`). Инкремент приносит только изменившиеся строки, по нему исчезновение строки не видно; снимок ключей кормит record tracking и effectivity-сателлиты (§6). Первые таблицы: `orders`, `order_items`, `products`, `sellers`, `order_reviews`. Оплаты не нужны: пропажу платежа ловит multi-active сателлит.
 - **Подводный камень:** `load_raw.py` организаторов делает `TRUNCATE` + `COPY`, при перезаливке у всех строк новый `_loaded_at` → инкремент заберёт таблицу целиком. Это не ломает модель: в сателлитах вставятся только изменившиеся версии (hashdiff). Проговариваем на защите.
-- **Schema drift:** новые колонки источника автоматически добавляются в DWH `raw` (логика уже есть в `pipelines/oltp_to_raw.py`, переносим). Это прямая подготовка ко вбросу «изменился формат».
-- Код `pipelines/oltp_to_raw.py` переписывается под 8 таблиц Olist (сейчас — под старый OLTP: водяной знак `updated_at`, синтаксис Cloudberry).
+- **Schema drift:** новые колонки источника автоматически добавляются в DWH `raw` (`pipelines/source_to_raw.py`). Это прямая подготовка ко вбросу «изменился формат».
+- EL для 8 таблиц Olist реализован в `pipelines/source_to_raw.py`; старый `pipelines/oltp_to_raw.py` удалён. Сценарии приёмки — `.plans/el-tz.md`.
 
 ---
 
@@ -428,14 +428,16 @@ Olist обещает доставку с огромным запасом (delive
 
 **Есть и проверено:** compose (source, dwh, clickhouse, airflow; metabase в профиле `bi`), `source/init` (init организаторов), `dwh/init.sql` (схемы и роли под новые слои), named collection ClickHouse → DWH, dbt-профиль на DWH (`dbt debug` ок), загрузчик mart → ClickHouse (EXCHANGE).
 
-**Под старую архитектуру, переписать / удалить:** сервис `metabase` (→ Superset), `pipelines/mart_to_clickhouse.py` (база `mp` и Cloudberry в докстринге → `mart`), `pipelines/oltp_to_raw.py` (EL), `dbt/models/staging/*`, макрос `cloudberry_create_table_as`, `oltp/`, DAG `oltp_simulator`, make-цели `seed` / `tick`.
+**Обновление ODS:** 13 staging views и 33 таблицы ODS, собственные макросы и 203 теста dbt; baseline `dbt build` — 249/249 PASS. Старые staging-модели заменены моделями Olist; старые OLTP, EL, Cloudberry-макрос и DAG симулятора удалены. Решения и границы применимости — `.plans/ods-implementation.md`.
+
+**Под старую архитектуру, переписать / удалить:** сервис `metabase` (→ Superset), `pipelines/mart_to_clickhouse.py` (база `mp` и Cloudberry в докстринге → `mart`), оставшиеся ссылки на `mp` в compose/Makefile перед публикацией витрин.
 
 ## 20. Следующие шаги
 
 - [x] Скрипт загрузки CSV Olist в `source` + `make seed`; залить данные (28.10, ТЗ: `.plans/seed-source-tz.md`).
 - [ ] EL source → DWH `raw` (инкремент по `_loaded_at` с перекрытием, `_batch_id`, служебные колонки под CDC, снимок ключей `raw.<таблица>__keys`, schema drift).
 - [x] Макросы `sat`, `rts`, `eff_sat` (28.10, проверены на DWH: инкремент = `--full-refresh`).
-- [ ] dbt: sources на `raw`, макросы `hash_key` / `hub` / `link`, staging, `ods`.
+- [x] dbt: sources на `raw`, макросы `hash_key` / `hub` / `link` / `safe_cast`, staging, `ods` и `err_cast` (28.10; результаты и ограничения upstream — `.plans/ods-implementation.md`).
 - [ ] `dds`, тесты и сверки.
 - [ ] `mart`: пять витрин дашборда + `refresh_status` (§8) = ответы блока А; тесты dbt на контрольные цифры §9, зерно (24 месяца, 74 категории, 1 строка summary), сходимость выручки месяцы = продавцы = категории = итог.
 - [ ] ClickHouse: DDL базы `mart` (витрины + `__stg`) в `infra/clickhouse/init`, `mart_to_clickhouse.py` на базу `mart` и список витрин, пользователь `bi_reader`.
