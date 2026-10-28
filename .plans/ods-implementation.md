@@ -126,3 +126,9 @@ DDS, mart, ML, EL и raw не изменялись.
   CREATE DATABASE. Harness копирует только DDL raw во временную БД,
   удаляет ее в `finally`; рабочие source/raw/ODS не изменяет. Логи и
   подписи сохраняются в `/tmp/ods-review-*` внутри Airflow.
+- Связка проверена через настоящий Airflow DAG `marketplace_elt`: запуск
+  `ods_acceptance__fe3ece4` завершился успешно 28.10 в 13:26:51 МСК.
+  `open_batch`, все 8 задач `extract_load` и `dbt_build` — success;
+  артефакт dbt этого запуска содержит **249/249 успешных результатов**.
+  Отдельный оператор на каждую SQL-модель не требуется: `dbt_build`
+  исполняет полный граф staging/ODS вместе с тестами и зависимостями.
