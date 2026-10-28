@@ -1,0 +1,23 @@
+{
+  "orders": 99441,
+  "items": 112650,
+  "statuses": {
+    "delivered": 96478,
+    "invoiced": 314,
+    "shipped": 1107,
+    "processing": 301,
+    "unavailable": 609,
+    "canceled": 625,
+    "created": 5,
+    "approved": 2
+  },
+  "delivered_orders_with_items": 96478,
+  "revenue": "13221498.11",
+  "average_order_with_freight": "159.88",
+  "average_lines_and_units": "1.1421982213561641",
+  "customers": 96096,
+  "repeat_customers": 2997,
+  "repeat_pct": 3.1188,
+  "categories": 74,
+  "monthly_revenue": "13221498.11"
+}
