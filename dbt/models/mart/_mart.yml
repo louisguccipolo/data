@@ -1,0 +1,201 @@
+version: 2
+models:
+  - name: monthly_sales
+    description: 24 календарных месяца покупки [2016-09, 2018-09). Активные заказы; выручка по is_revenue без доставки, пропуски заполнены нулями.
+    columns:
+      - name: month
+        description: Первый день календарного месяца, date; зерно витрины.
+        tests: [unique, not_null]
+      - name: orders_all_count
+        description: Все активные заказы месяца, включая заказы без позиций; bigint.
+      - name: orders_delivered_count
+        description: Заказы месяца со статусом is_revenue на срезе; bigint.
+      - name: revenue_amount
+        description: Сумма items_price доходных заказов месяца без доставки; numeric(18,2), BRL.
+  - name: seller_sales
+    description: Все продавцы с позициями в активных доходных заказах; агрегация по постоянному seller_hk, адрес из текущей версии DDS. orders_count неаддитивен по продавцам.
+    columns:
+      - name: seller_id
+        description: Бизнес-ключ продавца; для системного Unknown — __unknown__; зерно витрины.
+        tests: [unique, not_null]
+      - name: seller_city
+        description: Город текущей версии продавца по HK; без дополнительной нормализации, может быть NULL.
+      - name: seller_state
+        description: Штат текущей версии продавца по HK, может быть NULL.
+      - name: orders_count
+        description: Точное число различных order_id продавца; bigint, не суммируется по продавцам.
+      - name: line_count
+        description: Число активных исходных позиций продавца; bigint.
+      - name: unit_count
+        description: Число единиц продавца; одна позиция равна единице, bigint.
+      - name: revenue_amount
+        description: Сумма price собственных активных позиций в доходных заказах; numeric(18,2), BRL без доставки.
+  - name: order_summary
+    description: Один итог по активным доходным заказам всей выгрузки. Средний чек и среднее число единиц считать из сумм и orders_count.
+    columns:
+      - name: summary_key
+        description: Константа delivered_all; зерно витрины.
+        tests: [unique, not_null]
+      - name: orders_count
+        description: Количество активных заказов с is_revenue; bigint.
+      - name: revenue_amount
+        description: Сумма items_price по заказам; numeric(18,2), BRL без доставки.
+      - name: freight_amount
+        description: Сумма items_freight по заказам; numeric(18,2), BRL.
+      - name: order_value_amount
+        description: Сумма items_value по заказам, равна revenue_amount + freight_amount; numeric(18,2), BRL.
+      - name: line_count
+        description: Сумма items_count доходных заказов; bigint, исходные позиции.
+      - name: unit_count
+        description: Сумма items_count доходных заказов; bigint, одна позиция равна единице.
+  - name: customer_summary
+    description: Один итог по customer_unique_id активных заказов всей выгрузки, все статусы, без позиций. Unknown не считается личностью, но его заказы входят в orders_count.
+    columns:
+      - name: summary_key
+        description: Константа all_customers; зерно витрины.
+        tests: [unique, not_null]
+      - name: customers_count
+        description: Количество различных известных customer_unique_id с активными заказами; bigint.
+      - name: repeat_customers_count
+        description: Покупатели с двумя и более активными заказами любого статуса; bigint.
+      - name: one_order_customers_count
+        description: Покупатели ровно с одним активным заказом любого статуса; bigint.
+      - name: orders_count
+        description: Все активные заказы, включая заказы с Unknown-покупателем и без позиций; bigint.
+  - name: category_sales
+    description: Категории по SK товара на момент продажи; названия из текущего состояния кода, иначе последней версии. Включая __unknown__. Доля от всей выручки до фильтрации топа; orders_count неаддитивен по категориям.
+    columns:
+      - name: category_key
+        description: Исходный category_code DDS, пустая категория — __unknown__; зерно витрины.
+        tests: [unique, not_null]
+      - name: category_name_original
+        description: Португальское category_name_pt, NULL для неизвестной категории.
+      - name: category_name_english
+        description: Английское category_name_en, NULL при отсутствии перевода.
+      - name: category_label
+        description: Перевод EN, иначе оригинал PT; для __unknown__ — «Категория не указана».
+      - name: is_unknown_category
+        description: Boolean, true только для __unknown__.
+      - name: is_translation_missing
+        description: Boolean из DDS, true для известной категории без перевода.
+      - name: orders_count
+        description: Точное число различных order_id с категорией; bigint, не суммируется между категориями.
+      - name: unit_count
+        description: Число активных позиций категории в доходных заказах; bigint.
+      - name: revenue_amount
+        description: Сумма price категории без доставки; numeric(18,2), BRL.
+      - name: revenue_share
+        description: Выручка категории / выручка всех категорий; double precision, доля 0–1 без округления.
+  - name: product_price_history
+    description: "История цен активных доставленных позиций по постоянному товару, дате покупки и цене; без фильтра товара-лидера."
+    tests:
+      - unique:
+          column_name: "jsonb_build_array(product_id, sale_date, price)"
+    columns:
+      - name: product_id
+        description: "Постоянный бизнес-ключ товара по product_hk; для Unknown — __unknown__; text."
+        tests: [not_null]
+      - name: sale_date
+        description: "Дата покупки заказа, date; может быть NULL при неизвестной дате."
+      - name: price
+        description: "Цена одной позиции без доставки, numeric(18,2), BRL."
+        tests: [not_null]
+      - name: unit_count
+        description: "Число позиций товара с этой датой и ценой; bigint."
+      - name: orders_count
+        description: "Число различных заказов товара с этой датой и ценой; bigint, неаддитивно."
+      - name: distinct_price_count
+        description: "Число различных цен товара за весь период, bigint; повторено на каждой строке товара."
+      - name: product_unit_count
+        description: "Число единиц товара за весь период, bigint; повторено на каждой строке товара."
+  - name: delivery_by_state
+    description: "Все штаты покупателей на момент заказа по §20 DDS; порог 500 применяется в SQL ответа. Метрики доставки только по is_revenue с датой доставки."
+    columns:
+      - name: customer_state
+        description: "upper(trim(customer_state)) из факта заказа; пустой — __unknown__; text, зерно."
+        tests: [unique, not_null]
+      - name: state_name
+        description: "Название штата из текущей dim_geo; text, NULL для неизвестного кода вне справочника."
+      - name: region
+        description: "Регион из текущей dim_geo; text, NULL для неизвестного кода вне справочника."
+      - name: orders_count
+        description: "Все активные заказы штата любого статуса; bigint, база порога 500."
+      - name: delivered_measured_count
+        description: "Число доходных заказов с датой доставки; bigint, знаменатель late_share."
+      - name: delivery_days_sum
+        description: "Сумма fct_order.to_customer_days по доставленным с датой; numeric без округления."
+      - name: avg_delivery_days
+        description: "Среднее to_customer_days по доставленным с датой; numeric без округления, NULL при отсутствии измерений."
+      - name: late_count
+        description: "Число доставленных с датой и is_late; bigint."
+      - name: late_share
+        description: "late_count / delivered_measured_count из numeric; double precision, 0–1, NULL при нулевом знаменателе."
+  - name: order_status_funnel
+    description: "Все текущие члены dim_order_status, включая нулевые и __unknown__; база доли — все активные заказы."
+    columns:
+      - name: order_status
+        description: "Код статуса из dim_order_status; text, зерно."
+        tests: [unique, not_null]
+      - name: status_group
+        description: "Группа статуса из dim_order_status; text."
+      - name: orders_count
+        description: "Все активные заказы статуса; bigint."
+      - name: order_share
+        description: "orders_count / число всех активных заказов из numeric; double precision, 0–1, NULL при пустой базе."
+      - name: orders_without_items_count
+        description: "Число активных заказов статуса с items_count = 0; bigint."
+  - name: payments_by_state_year
+    description: "Все активные платежи по штату покупателя на момент заказа и году покупки, без фильтра статуса. При отсутствии активного заказа — Unknown-штат и NULL-год."
+    tests:
+      - unique:
+          column_name: "jsonb_build_array(customer_state, purchase_year)"
+    columns:
+      - name: customer_state
+        description: "Нормализованный штат из fct_order как в delivery_by_state; text, часть зерна."
+        tests: [not_null]
+      - name: purchase_year
+        description: "Год даты покупки заказа; integer, часть зерна, NULL при неизвестной дате."
+      - name: payments_count
+        description: "Число строк активного fct_payment; bigint."
+      - name: payment_amount
+        description: "Сумма payment_value; numeric(18,2), BRL."
+      - name: installments_sum
+        description: "Сумма payment_installments, включая нули; bigint."
+      - name: avg_installments
+        description: "Среднее payment_installments, включая нули; numeric без округления."
+      - name: zero_installments_count
+        description: "Число платежей с payment_installments = 0; bigint."
+  - name: payments_by_type
+    description: "Все активные платежи по способу оплаты за весь период и при любом статусе заказа; not_defined — обычный способ."
+    columns:
+      - name: payment_type
+        description: "Способ оплаты из fct_payment; text, зерно."
+        tests: [unique, not_null]
+      - name: payments_count
+        description: "Число строк активного fct_payment; bigint."
+      - name: payment_amount
+        description: "Сумма payment_value; numeric(18,2), BRL."
+      - name: installments_sum
+        description: "Сумма payment_installments, включая нули; bigint."
+      - name: avg_installments
+        description: "Среднее payment_installments, включая нули; numeric без округления."
+      - name: zero_installments_count
+        description: "Число платежей с payment_installments = 0; bigint."
+  - name: review_delivery
+    description: "Один последний активный отзыв на активный заказ любого статуса; максимум creation, answer, review_id, NULL-даты после известных. Доставка только is_revenue с датой."
+    tests:
+      - unique:
+          column_name: "coalesce(review_score, 0)"
+    columns:
+      - name: review_score
+        description: "Оценка 1–5, integer; отдельная группа NULL, если у последнего отзыва нет оценки; зерно."
+      - name: orders_count
+        description: "Активные заказы с этой оценкой последнего активного отзыва; bigint."
+      - name: delivered_measured_count
+        description: "Из них доходные заказы с датой доставки; bigint."
+      - name: avg_delivery_days
+        description: "Среднее to_customer_days по доставленным с датой; numeric без округления, NULL при отсутствии измерений."
+      - name: late_count
+        description: "Число доставленных с датой и is_late; bigint."
+      - name: late_share
+        description: "late_count / delivered_measured_count из numeric; double precision, 0–1, NULL при нулевом знаменателе."

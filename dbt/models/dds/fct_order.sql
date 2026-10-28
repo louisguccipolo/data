@@ -7,7 +7,8 @@ with items as (
     select order_hk, count(*) as payments_count, sum(payment_value) as payment_value
     from {{ ref('fct_payment') }} where not is_deleted group by 1
 ), orders as (
-    select o.*, coalesce(c.customer_sk, repeat('0',32)::char(32)) as customer_sk,
+    select o.*, coalesce(c.bound_sk, repeat('0',32)::char(32)) as customer_sk,
+        coalesce(c.customer_hk, repeat('0',32)::char(32)) as customer_hk,
         p.customer_id, p.customer_zip_code_prefix, p.customer_city, p.customer_state,
         coalesce(t.order_status, '__unknown__') as status_code, coalesce(t.is_revenue, false) as is_revenue,
         coalesce(d.date_key, -1) as order_purchase_date_key,
@@ -16,7 +17,8 @@ with items as (
         coalesce(v.payments_count, 0) as payments_count, coalesce(v.payment_value, 0) as payment_value
     from {{ ref('int_order_on_slice') }} o
     left join {{ ref('int_order_profile_on_slice') }} p using (order_hk)
-    left join {{ ref('dim_customer') }} c on c.customer_hk = p.customer_hk and c.is_current
+    left join ({{ dds_bound_version('customer') }}) c on c.customer_hk = p.customer_hk
+        and c.bound_valid_from <= p.bind_dts and p.bind_dts < c.valid_to
     left join {{ ref('dim_order_status') }} t on t.order_status = o.order_status
     left join {{ ref('dim_date') }} d on d.date = o.order_purchase_ts::date
     left join items i using (order_hk) left join payments v using (order_hk)
@@ -37,5 +39,5 @@ select order_id, order_hk, customer_sk, customer_id, customer_zip_code_prefix, c
     -- canceled/unavailable могли закрыться до подтверждения: пустая дата у них не аномалия
     status_code in ('invoiced', 'processing', 'shipped', 'delivered') and order_approved_ts is null as is_approved_missing,
     coalesce(order_delivered_carrier_ts < order_purchase_ts, false) as is_carrier_before_purchase,
-    is_deleted, is_incomplete
+    is_deleted, is_incomplete, customer_hk
 from orders

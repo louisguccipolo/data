@@ -1,4 +1,4 @@
-"""Независимая приёмка dbt DDS на синтетических батчах.
+"""Независимая приёмка dbt DDS и mart на синтетических батчах.
 
 Запуск из корня локального стенда:
     docker compose exec -T airflow python - < scripts/check_dds.py
@@ -62,13 +62,16 @@ def query(statement, params=()):
 def build(label, full=False, expect_success=True, only=None, as_of=None):
     args = ['dbt', '--no-use-colors', '--log-path', str(WORK / 'logs'), 'build',
             '--project-dir', '/opt/project/dbt', '--profiles-dir', str(WORK),
-            '--target-path', str(WORK / 'target'), '--no-partial-parse']
+            '--target-path', str(WORK / 'target'), '--no-partial-parse',
+            '--indirect-selection', 'cautious']
     if as_of:
         args.extend(['--vars', json.dumps({'as_of_dts': as_of})])
     if full:
         args.append('--full-refresh')
-    if only:
-        args.extend(['--select', *only])
+    # Synthetic dates do not span the fixed 24-month Olist calendar. Only that
+    # dataset-specific error test is excluded; all mart invariants and warn controls run.
+    args.extend(['--select', *(only or ['+path:models/dds', 'path:models/mart'])])
+    args.extend(['--exclude', 'mart_monthly_calendar'])
     result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     (WORK / (label + '.log')).write_text(result.stdout)
     print(label, 'exit=', result.returncode, flush=True)
@@ -93,11 +96,18 @@ def insert(table, rows, batch):
         execute_values(cur, stmt.as_string(cur), [[r.get(c) for c in columns] for r in data])
 
 # Полные наблюдаемые наборы и непустые снимки: ограничения upstream сохранены.
-U2, R2 = '5' * 32, '6' * 32
+U2, R2, O3, O4, C3, O5, C4 = [c * 32 for c in '567890a']
 ROWS['products'] = [dict(product_id=P, product_category_name='cat_a', product_weight_g='100')]
 ROWS['product_category_translation'] = [dict(product_category_name='cat_a', product_category_name_english='Category A')]
 ROWS['customers'][1].update(customer_city='Other', customer_state='RJ', customer_zip_code_prefix='22222')
 ROWS['sellers'][0]['seller_city'] = 'Old'
+# A revenue sale before the category/seller change; O5 retains the created status.
+ROWS['orders'][0]['order_status'] = 'delivered'
+# Two orders already use C2 before its move; O4 first appears in the move batch.
+ROWS['orders'].append(dict(ROWS['orders'][1], order_id=O3))
+ROWS['orders'].append(dict(ROWS['orders'][0], order_id=O5, customer_id=C4, order_status='created'))
+# U2 is known before binding, even though C2 only switches to it in batch 3.
+ROWS['customers'].append(dict(ROWS['customers'][0], customer_id=C3, customer_unique_id=U2))
 
 def batch(n):
     import copy
@@ -107,15 +117,23 @@ def batch(n):
         rows['products'].append(dict(product_id=P2, product_category_name='cat_b', product_weight_g='200'))
         rows['sellers'][0]['seller_city'] = 'New'
         rows['orders'][0]['customer_id'] = C2
+        rows['customers'][1].update(customer_city='Moved', customer_state='MG', customer_zip_code_prefix='33333')
+        rows['orders'].append(dict(ROWS['orders'][1], order_id=O4))
+        rows['order_items'].append(dict(ROWS['order_items'][0], order_id=O4))
+        rows['customers'].append(dict(ROWS['customers'][0], customer_id=C4,
+                                     customer_unique_id='b' * 32, customer_city='Late'))
         rows['order_payments'] = [ROWS['order_payments'][0], ROWS['order_payments'][2]]
         rows['order_reviews'] = [dict(ROWS['order_reviews'][1], review_id=R2)]
     if n >= 3:
         rows['order_items'][0]['product_id'] = P2
+        rows['products'][1]['product_weight_g'] = '300'
         rows['customers'][1]['customer_unique_id'] = U2
+        rows['customers'][-1]['customer_city'] = 'Later'
         rows['sellers'] = [rows['sellers'][1]]
         rows['product_category_translation'].append(dict(product_category_name='cat_b', product_category_name_english='Category B'))
     if n == 4:
         rows['products'][0]['product_category_name'] = 'cat_a'
+        rows['products'][1]['product_weight_g'] = '400'
         rows['sellers'] = copy.deepcopy(ROWS['sellers'])
     for table, records in rows.items():
         insert(table, records, n)
@@ -129,6 +147,12 @@ def fingerprints(include_metadata=False):
         projection = 'as_of_dts' if table == 'build_info' and not include_metadata else '*'
         result[table] = query(sql.SQL("select count(*), md5(coalesce(string_agg(md5(t::text), '' order by md5(t::text)), '')) from (select {} from dds.{}) t").format(sql.SQL(projection), sql.Identifier(table)))[0]
     return result
+
+def mart_fingerprints():
+    return {table: query(sql.SQL(
+        "select count(*), md5(coalesce(string_agg(md5(t::text), '' order by md5(t::text)), '')) from mart.{} t"
+    ).format(sql.Identifier(table)))[0] for (table,) in query(
+        "select tablename from pg_tables where schemaname='mart' order by tablename")}
 
 def check(condition, message):
     assert condition, message
@@ -164,51 +188,86 @@ try:
     batch(1)
     build('01_initial')
     initial = fingerprints()
+    initial_mart = mart_fingerprints()
+    initial_a_revenue = query("select revenue_amount from mart.category_sales where category_key='cat_a'")
     check(query("select p.category_code from dds.fct_order_item i join dds.dim_product p using (product_sk) where i.order_id=%s", (O,)) == [('cat_a',)], 'первый срез: продажа в категории A')
     check(query("select is_incomplete from dds.dim_product where product_id=%s and is_current", (P2,)) == [(True,)], 'товар только из order_items остаётся отдельной неполной сущностью')
+    check(query("select p.is_incomplete from dds.fct_order_item i join dds.dim_product p using (product_sk) where i.order_id=%s", (O2,)) == [(True,)], 'до прихода атрибутов факт ссылается на неполную версию')
+    check(query("select customer_sk, customer_hk, customer_city from dds.fct_order where order_id=%s", (O5,)) == [('0' * 32, '0' * 32, None)], 'нет покупателя и географии профиля — Unknown HK/SK и NULL')
     check(query("select customer_city from dds.fct_order where order_id=%s", (O,)) == [('Town',)], 'география первого профиля')
     build('02_repeat')
     check(initial == fingerprints(), 'повторная сборка: все DDS подписи равны, build_info сравнивается по отсечке')
+    check(initial_mart == mart_fingerprints(), 'повторная сборка: подписи всех mart равны')
     batch(2)
     build('03_changes')
-    check(query("select p.category_code from dds.fct_order_item i join dds.dim_product p using (product_sk) where i.order_id=%s", (O,)) == [('cat_b',)], 'после A → B прежняя продажа относится к B')
+    check(query("select revenue_amount from mart.category_sales where category_key='cat_a'") == initial_a_revenue == [(100,)], 'mart: A → B не меняет выручку старой категории A')
+    check(query("select revenue_amount from mart.category_sales where category_key='cat_b'") == [(130,)], 'mart: новая продажа 100 и поздний товар 30 относятся к B')
+    check(query("select count(*) = count(distinct category_key) from mart.category_sales") == [(True,)], 'mart: один код категории — одна строка')
+    check(query("select seller_city, revenue_amount from mart.seller_sales where seller_id=%s", (S,)) == [('New', 200)], 'mart: переехавший продавец — одна строка с текущим городом и всей выручкой')
+    check(query("select customer_state, orders_count from mart.delivery_by_state where customer_state in ('RJ','MG') order by customer_state") == [('MG', 2), ('RJ', 2)], 'mart: два старых заказа остаются в RJ, новые связи получают MG')
+    check(query("select count(distinct product_id), sum(unit_count), max(product_unit_count) from mart.product_price_history where product_id=%s", (P,)) == [(1, 2, 2)], 'mart: смена категории не дробит постоянную историю цены товара')
+    check(query("select p.category_code, p.is_current from dds.fct_order_item i join dds.dim_product p using (product_sk) where i.order_id=%s", (O,)) == [('cat_a', False)], 'после A → B прежняя продажа остаётся в A на нетекущем SK')
+    check(query("select p.category_code from dds.fct_order_item i join dds.dim_product p on p.product_hk=i.product_hk and p.is_current where i.order_id=%s", (O,)) == [('cat_b',)], 'через постоянный HK прежняя продажа видна в текущей категории B')
+    check(query("select p.category_code, p.is_current from dds.fct_order_item i join dds.dim_product p using (product_sk) where i.order_id=%s", (O4,)) == [('cat_b', True)], 'новая продажа после смены привязана к B')
     check(query("select count(*) from dds.dim_seller where seller_id=%s", (S,)) == [(2,)], 'смена адреса продавца создаёт две версии')
-    check(query("select s.seller_city, s.is_current from dds.fct_order_item i join dds.dim_seller s using (seller_sk) where i.order_id=%s", (O,)) == [('New', True)], 'факт ссылается на текущий адрес продавца')
+    check(query("select s.seller_city, s.is_current from dds.fct_order_item i join dds.dim_seller s using (seller_sk) where i.order_id=%s", (O,)) == [('Old', False)], 'старая продажа сохраняет старый адрес продавца')
+    check(query("select s.seller_city, s.is_current from dds.fct_order_item i join dds.dim_seller s using (seller_sk) where i.order_id=%s", (O4,)) == [('New', True)], 'новая продажа получает новый адрес продавца')
     check(query("select is_deleted, payment_value from dds.fct_payment where order_id=%s and payment_sequential=2", (O,)) == [(True, 10)], 'исчезнувший платёж сохранён с последними мерами и флагом удаления')
     check(query("select payment_value from dds.fct_order where order_id=%s", (O,)) == [(100,)], 'сумма заказа исключает исчезнувший платёж')
-    check(query("select customer_city from dds.fct_order where order_id=%s", (O,)) == [('Other',)], 'смена профиля меняет географию заказа')
+    check(query("select customer_id, customer_zip_code_prefix, customer_city, customer_state from dds.fct_order where order_id=%s", (O,)) == [(C2, '33333', 'Moved', 'MG')], 'смена профиля меняет географию заказа на географию новой связи')
+    check(query("select customer_zip_code_prefix, customer_city, customer_state from dds.fct_order where order_id in (%s,%s) order by order_id", (O2, O3)) == [('22222', 'Other', 'RJ')] * 2, 'переезд того же customer_id сохраняет адрес обоих старых заказов')
+    check(query("select customer_zip_code_prefix, customer_city, customer_state from dds.fct_order where order_id=%s", (O4,)) == [('33333', 'Moved', 'MG')], 'новый заказ профиля в батче переезда получает новый адрес')
     check(query("select count(*) from dds.fct_review where review_id=%s and is_deleted", (R,)) == [(2,)], 'удаление отзыва помечает обе пары')
     check(query("select is_translation_missing from dds.dim_product where product_id=%s and is_current", (P,)) == [(True,)], 'известная категория без перевода сохраняется')
     check(query("select count(*) from dds.dim_product where product_id=%s and not is_incomplete and is_current", (P2,)) == [(1,)], 'поступившие атрибуты создают полную версию товара')
-    build('04_past_slice', only=['path:models/dds'], as_of='2026-01-01 00:00:00+00')
+    check(query("select p.is_incomplete, p.product_weight_g from dds.fct_order_item i join dds.dim_product p using (product_sk) where i.order_id=%s", (O2,)) == [(False, 200)], 'поздний товар заменяет неполную привязку первой полной версией')
+    check(query("select customer_city from dds.fct_order where order_id=%s", (O5,)) == [('Late',)], 'нет географии до bind_dts — первая строка профиля на срезе')
+    check(query("select c.customer_unique_id, c.is_incomplete, o.customer_hk=c.customer_hk from dds.fct_order o join dds.dim_customer c using (customer_sk) where o.order_id=%s", (O5,)) == [('b' * 32, False, True)], 'нет версии на bind_dts — первая полная версия известного покупателя, согласованные HK/SK')
+    build('04_past_slice', only=['path:models/dds', 'path:models/mart'], as_of='2026-01-01 00:00:00+00')
     check(initial == fingerprints(), 'прошлая отсечка полностью воспроизводит первоначальный DDS, включая категорию и профиль')
+    check(query("select customer_city from dds.fct_order where order_id in (%s,%s) order by order_id", (O2, O3)) == [('Other',)] * 2, 'до батча переезда оба существующих заказа имеют старый адрес')
+    check(query("select customer_id, customer_city from dds.fct_order where order_id=%s", (O,)) == [(C, 'Town')], 'до смены профиля заказ имеет прежний профиль и географию')
+    check(initial_mart == mart_fingerprints(), 'прошлая отсечка воспроизводит все mart')
     batch(3)
     build('05_latest')
     check(query("select count(*), min(p.product_id) from dds.fct_order_item i join dds.dim_product p using (product_sk) where i.order_id=%s", (O,)) == [(1, P2)], 'смена товара не дублирует зерно позиции')
+    check(query("select p.product_weight_g, p.valid_from::text from dds.fct_order_item i join dds.dim_product p using (product_sk) where i.order_id=%s", (O,)) == [(300, '2026-01-03 00:00:00+00')], 'смена товара задаёт новый bind_dts и версию нового товара на новую связь')
     check(query("select s.is_deleted, i.is_deleted from dds.fct_order_item i join dds.dim_seller s using (seller_sk) where i.order_id=%s", (O,)) == [(True, False)], 'удаление продавца не удаляет продажи')
     check(query("select count(*) from dds.dim_product where product_id=%s and category_code='cat_b' and not is_translation_missing and is_current", (P,)) == [(1,)], 'поздний перевод создаёт новую версию товара')
     check(query("select c.customer_unique_id from dds.fct_order o join dds.dim_customer c using (customer_sk) where o.order_id=%s", (O,)) == [(U2,)], 'effectivity профиля выбирает нового постоянного покупателя')
+    check(query("select customer_city from dds.fct_order where order_id=%s", (O5,)) == [('Late',)], 'поздняя география остаётся первой на срезе после следующего переезда')
+    check(query("select category_name_english from mart.category_sales where category_key='cat_b'") == [('Category B',)], 'mart: поздний перевод обновляет название категории без дробления кода')
     batch(4)
     build('06_return')
     check(query("select array_agg(category_code order by valid_from) from dds.dim_product where product_id=%s", (P,))[0][0] == ['cat_a', 'cat_b', 'cat_b', 'cat_a'], 'A → B → A сохраняет разные версии, включая поздний перевод B')
     check(query("select is_deleted from dds.dim_seller where seller_id=%s and is_current", (S,)) == [(False,)], 'возврат продавца снимает удаление')
+    check(query("select p.product_weight_g, p.is_current from dds.fct_order_item i join dds.dim_product p using (product_sk) where i.order_id=%s", (O,)) == [(300, False)], 'новая связь сохраняет версию своего bind_dts после следующего изменения товара')
+    check(query("select p.product_weight_g, p.is_current from dds.fct_order_item i join dds.dim_product p using (product_sk) where i.order_id=%s", (O2,)) == [(200, False)], 'позднее измерение остаётся на первой полной версии, а не на последней')
+    check(query("select p.category_code, p.is_translation_missing from dds.fct_order_item i join dds.dim_product p using (product_sk) where i.order_id=%s", (O4,)) == [('cat_b', True)], 'поздний перевод и возврат категории не переписывают привязанную продажу')
     latest = fingerprints()
+    latest_mart = mart_fingerprints()
     build('07_latest_repeat')
     check(latest == fingerprints(), 'повторный последний срез детерминирован')
+    check(latest_mart == mart_fingerprints(), 'повторный последний срез: все mart детерминированы')
     build('08_full_refresh', full=True)
     check(latest == fingerprints(), 'ODS full-refresh + DDS равны incremental по всем подписям')
+    check(latest_mart == mart_fingerprints(), 'ODS full-refresh + DDS + mart равны incremental по всем mart')
+    (WORK / 'mart-fingerprints.json').write_text(json.dumps(latest_mart, sort_keys=True))
     (WORK / 'fingerprints.json').write_text(json.dumps(latest, sort_keys=True))
     for test, table, records in [
         ('stg_order_profile_conflicts', 'orders', [dict(ROWS['orders'][0], customer_id=C), dict(ROWS['orders'][0], customer_id=C2)]),
         ('stg_customer_profile_link_conflicts', 'customers', [dict(ROWS['customers'][0], customer_unique_id=U), dict(ROWS['customers'][0], customer_unique_id=U2)]),
     ]:
         before = fingerprints(include_metadata=True)
+        before_mart = mart_fingerprints()
         insert(table, records, 5)
         results = build('09_' + test, expect_success=False)
         check(any(x['unique_id'].endswith('.' + test) and x['status'] == 'fail' for x in results['results']), 'конфликт связей блокируется: ' + test)
         check(before == fingerprints(include_metadata=True), 'конфликт staging сохраняет прежние DDS таблицы')
+        check(before_mart == mart_fingerprints(), 'конфликт staging сохраняет прежние mart таблицы')
         query(sql.SQL("delete from raw.{} where _batch_id='review-5'").format(sql.Identifier(table)))
     before = fingerprints(include_metadata=True)
+    before_mart = mart_fingerprints()
     insert('order_items', [dict(ROWS['order_items'][0], price='not-money')], 6)
     results = build('10_critical', expect_success=False)
     check(any(x['unique_id'].endswith('.err_cast_critical') and x['status'] == 'fail' for x in results['results']), 'gate err_cast_critical падает')
@@ -218,6 +277,10 @@ try:
                  and x['unique_id'].split('.')[-1] in expected_models]
     check(len(dds_nodes) == len(expected_models) and all(x['status'] == 'skipped' for x in dds_nodes), 'все модели DDS пропущены при критической ошибке')
     check(before == fingerprints(include_metadata=True), 'gate сохраняет все прежние DDS таблицы, включая build_info')
+    mart_nodes = [x for x in results['results'] if x['unique_id'].startswith('model.marketplace.')
+                  and x['unique_id'].split('.')[-1] in before_mart]
+    check(len(mart_nodes) == len(before_mart) and all(x['status'] == 'skipped' for x in mart_nodes), 'все модели mart пропущены при критической ошибке')
+    check(before_mart == mart_fingerprints(), 'gate сохраняет все прежние mart таблицы')
     print('DDS_ACCEPTANCE_PASSED; tables compared:', len(latest), flush=True)
 finally:
     with admin.cursor() as c:

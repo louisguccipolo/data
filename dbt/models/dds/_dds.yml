@@ -229,8 +229,8 @@ models:
     - unique
     - not_null
 - name: fct_order
-  description: Один заказ, включая заказы без позиций; география по действующему профилю,
-    предагрегаты активных дочерних строк.
+  description: Один заказ, включая заказы без позиций; география действующего профиля на первое
+    наблюдение связи; customer SK по §20, предагрегаты активных дочерних строк.
   columns:
   - name: order_hk
     tests:
@@ -246,6 +246,15 @@ models:
         arguments:
           to: ref('dim_date')
           field: date_key
+  - name: customer_hk
+    description: Постоянный HK сущности; Unknown — 32 нуля. Для текущих атрибутов
+      соединять с dim_customer по HK и is_current, для версии продажи — по SK.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_customer')
+          field: customer_hk
   - name: customer_sk
     tests:
     - not_null
@@ -261,8 +270,8 @@ models:
           to: ref('dim_order_status')
           field: order_status
 - name: fct_order_item
-  description: Одна позиция order_id × order_item_id; выбранная связь и текущие на
-    срезе product/seller SK.
+  description: Одна позиция order_id × order_item_id; выбранная связь и product/seller SK
+    на первое наблюдение этой связи с правилом позднего измерения (§20).
   columns:
   - name: order_id
     tests:
@@ -280,6 +289,15 @@ models:
         arguments:
           to: ref('dim_date')
           field: date_key
+  - name: product_hk
+    description: Постоянный HK сущности; Unknown — 32 нуля. Для текущих атрибутов
+      соединять с dim_product по HK и is_current, для версии продажи — по SK.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_product')
+          field: product_hk
   - name: product_sk
     tests:
     - not_null
@@ -287,6 +305,15 @@ models:
         arguments:
           to: ref('dim_product')
           field: product_sk
+  - name: seller_hk
+    description: Постоянный HK сущности; Unknown — 32 нуля. Для текущих атрибутов
+      соединять с dim_seller по HK и is_current, для версии продажи — по SK.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_seller')
+          field: seller_hk
   - name: seller_sk
     tests:
     - not_null
@@ -388,8 +415,8 @@ models:
 - name: int_order_on_slice
   description: Хаб заказа и последние на срезе даты, статус и entity effectivity.
 - name: int_order_profile_on_slice
-  description: Активные на срезе связи заказ → профиль → постоянный покупатель и последняя
-    география профиля.
+  description: Активные на срезе связи заказ → профиль → постоянный покупатель; bind_dts
+    из link_order_profile и география профиля на bind_dts (иначе первая на срезе).
 - name: int_order_item_candidates
   description: Все связи позиции, известные на срезе, с последними атрибутами, eff
     и приоритетом выбора.

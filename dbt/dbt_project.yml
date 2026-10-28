@@ -24,6 +24,9 @@ models:
     dds:
       +schema: dds
       +materialized: table
+    mart:
+      +schema: mart
+      +materialized: table
 
 seeds:
   marketplace:
