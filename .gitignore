@@ -8,3 +8,17 @@ __pycache__/
 *.pyc
 .venv/
 dbt/.user.yml
+
+# Local ML mart builds (reproducible with marts/build.py)
+marts/data/
+marts/data.building/
+marts/data.previous/
+.ipynb_checkpoints/
+
+# Delivery experiment outputs
+models/delivery_eta/*.cbm
+reports/delivery_eta/*.parquet
+
+.DS_Store
+.venv
+.idea

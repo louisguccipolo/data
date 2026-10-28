@@ -51,3 +51,7 @@ ch:
 
 logs:
 	$(DC) logs -f --tail 100 $(S)
+
+.PHONY: ml-marts
+ml-marts:       ## собрать Parquet для ML-ноутбуков без DWH
+	.venv/bin/python marts/build.py

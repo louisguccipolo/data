@@ -1,0 +1,242 @@
+{
+  "model_version": "catboost_pair_v1_asof20180601",
+  "selected_boosting": "catboost_residual_ids",
+  "selected_baseline": "pair_prior",
+  "target": "days from payment approval to customer delivery",
+  "grain": [
+    "seller_id",
+    "city_id",
+    "forecast_date"
+  ],
+  "features": 94,
+  "test_orders": 15195,
+  "test_pair_days": 14907,
+  "test_from": "2018-06-01",
+  "test_to_exclusive": "2018-08-15",
+  "test_MAE_days": 3.2821387155526502,
+  "baseline_MAE_days": 4.93650660688566,
+  "MAE_reduction_pct": 33.51292772555846,
+  "MAE_improvement_day_bootstrap_95ci": [
+    1.5563960362539864,
+    1.7587344982203237
+  ],
+  "quantiles": {
+    "p50_empirical_coverage": 0.5591971043106285,
+    "p90_empirical_coverage": 0.9641987495886805,
+    "p90_pinball": 1.2220886523644185,
+    "raw_quantile_crossing_rate": 0.0,
+    "median_p90_minus_p50_days": 9.437289544172547
+  },
+  "validation": [
+    {
+      "model": "catboost_residual_ids",
+      "MAE": 5.830283111844945,
+      "RMSE": 9.042372432576629,
+      "MedianAE": 3.496241686005808,
+      "P90_AE": 14.137075256332924,
+      "Bias_pred_minus_actual": -2.6584625073040895,
+      "Within_3d": 0.4428499242041435,
+      "Within_5d": 0.6302172814552804,
+      "Pair_day_macro_MAE": 5.865320828281365,
+      "iterations": 48.0,
+      "seconds": 2.48
+    },
+    {
+      "model": "catboost_residual",
+      "MAE": 5.840973389823429,
+      "RMSE": 9.081960327398916,
+      "MedianAE": 3.5238146140041895,
+      "P90_AE": 14.169368770760077,
+      "Bias_pred_minus_actual": -2.7255522741221414,
+      "Within_3d": 0.4408287013643254,
+      "Within_5d": 0.6336533602829711,
+      "Pair_day_macro_MAE": 5.876721162888764,
+      "iterations": 41.0,
+      "seconds": 2.03
+    },
+    {
+      "model": "catboost_base",
+      "MAE": 5.909265610243882,
+      "RMSE": 9.429352283261943,
+      "MedianAE": 3.2375086923286833,
+      "P90_AE": 15.14674130019113,
+      "Bias_pred_minus_actual": -3.56716257417183,
+      "Within_3d": 0.4743810005053057,
+      "Within_5d": 0.645477513895907,
+      "Pair_day_macro_MAE": 5.943578246154733,
+      "iterations": 176.0,
+      "seconds": 3.27
+    },
+    {
+      "model": "pair_prior",
+      "MAE": 6.001227468272491,
+      "RMSE": 9.042154383784947,
+      "MedianAE": 3.8696955495318246,
+      "P90_AE": 13.870589684724846,
+      "Bias_pred_minus_actual": -2.1509531476693424,
+      "Within_3d": 0.39191510864072765,
+      "Within_5d": 0.6098029307731178,
+      "Pair_day_macro_MAE": 6.0354136631902655,
+      "iterations": "",
+      "seconds": ""
+    },
+    {
+      "model": "handling_plus_route",
+      "MAE": 6.1628602729729725,
+      "RMSE": 9.164952143176071,
+      "MedianAE": 4.113368684643067,
+      "P90_AE": 14.058858576959858,
+      "Bias_pred_minus_actual": -2.2057637696148693,
+      "Within_3d": 0.36078827690752907,
+      "Within_5d": 0.5928246589186458,
+      "Pair_day_macro_MAE": 6.185266122411039,
+      "iterations": "",
+      "seconds": ""
+    },
+    {
+      "model": "catboost_features",
+      "MAE": 6.188318263940106,
+      "RMSE": 9.826364696511869,
+      "MedianAE": 3.3528964847170144,
+      "P90_AE": 15.988534511343818,
+      "Bias_pred_minus_actual": -3.9211219492048817,
+      "Within_3d": 0.457099545224861,
+      "Within_5d": 0.6379989893885801,
+      "Pair_day_macro_MAE": 6.223225645970794,
+      "iterations": 63.0,
+      "seconds": 2.27
+    },
+    {
+      "model": "global_mean",
+      "MAE": 7.728971887370389,
+      "RMSE": 10.735029220327776,
+      "MedianAE": 5.931347425915723,
+      "P90_AE": 16.577689611121325,
+      "Bias_pred_minus_actual": -1.9589317671859183,
+      "Within_3d": 0.258211217786761,
+      "Within_5d": 0.4114199090449722,
+      "Pair_day_macro_MAE": 7.739131717276141,
+      "iterations": "",
+      "seconds": ""
+    },
+    {
+      "model": "global_median",
+      "MAE": 7.757418445763854,
+      "RMSE": 11.214053974979457,
+      "MedianAE": 5.353159722222222,
+      "P90_AE": 18.407104166666674,
+      "Bias_pred_minus_actual": -3.788346322731271,
+      "Within_3d": 0.2809499747347145,
+      "Within_5d": 0.4735725113693785,
+      "Pair_day_macro_MAE": 7.781275871782057,
+      "iterations": "",
+      "seconds": ""
+    }
+  ],
+  "test_metrics": [
+    {
+      "model": "catboost_p50",
+      "MAE": 3.2821387155526502,
+      "RMSE": 5.241829857485786,
+      "MedianAE": 2.23050438545075,
+      "P90_AE": 6.914965293943555,
+      "Bias_pred_minus_actual": -0.11634870528279591,
+      "Within_3d": 0.621256992431721,
+      "Within_5d": 0.8076340901612372,
+      "Pair_day_macro_MAE": 3.289119281970607
+    },
+    {
+      "model": "global_median",
+      "MAE": 4.8345862239954664,
+      "RMSE": 6.376209500519902,
+      "MedianAE": 4.270578703703704,
+      "P90_AE": 8.547430555555556,
+      "Bias_pred_minus_actual": 1.9649397165551534,
+      "Within_3d": 0.327673576834485,
+      "Within_5d": 0.6010529779532741,
+      "Pair_day_macro_MAE": 4.817662339400372
+    },
+    {
+      "model": "handling_plus_route",
+      "MAE": 4.905205522532763,
+      "RMSE": 6.275853734515094,
+      "MedianAE": 4.440455529840642,
+      "P90_AE": 9.124050061948774,
+      "Bias_pred_minus_actual": 3.400489261341785,
+      "Within_3d": 0.3256992431720961,
+      "Within_5d": 0.5754524514642975,
+      "Pair_day_macro_MAE": 4.9154529409811865
+    },
+    {
+      "model": "pair_prior",
+      "MAE": 4.93650660688566,
+      "RMSE": 6.445049235225455,
+      "MedianAE": 4.158116819586082,
+      "P90_AE": 9.592505799876418,
+      "Bias_pred_minus_actual": 3.3028707539107036,
+      "Within_3d": 0.3554458703520895,
+      "Within_5d": 0.5939453767686739,
+      "Pair_day_macro_MAE": 4.9567608060156
+    },
+    {
+      "model": "global_mean",
+      "MAE": 6.146494691626838,
+      "RMSE": 7.3883454295808155,
+      "MedianAE": 5.992017507043449,
+      "P90_AE": 10.409968895932339,
+      "Bias_pred_minus_actual": 4.218126205080083,
+      "Within_3d": 0.21579466929911156,
+      "Within_5d": 0.38407370845672917,
+      "Pair_day_macro_MAE": 6.124716639447992
+    }
+  ],
+  "checks": [
+    "no order-specific model features",
+    "pair-day feature invariance",
+    "labels available before fit cutoff",
+    "test not used for model selection",
+    "saved model prediction parity",
+    "recomputed daily features match training mart",
+    "new pair scoring and ordered quantiles"
+  ],
+  "promise_metrics": [
+    {
+      "model": "catboost_p50",
+      "MAE_days": 3.2821387155526502,
+      "RMSE_days": 5.241829857485786,
+      "MedianAE_days": 2.23050438545075,
+      "Mean_late_days_all_orders": 1.6992437104177232,
+      "Late_order_share": 0.4408028956893715,
+      "On_time_coverage": 0.5591971043106285,
+      "Mean_late_days_among_late": 3.854883275574396,
+      "Mean_promised_days": 8.596419911495385
+    },
+    {
+      "model": "catboost_p90",
+      "MAE_days": 10.057779487032935,
+      "RMSE_days": 11.118407595692544,
+      "MedianAE_days": 9.613032397402808,
+      "Mean_late_days_all_orders": 0.27038837957640643,
+      "Late_order_share": 0.03580125041131951,
+      "On_time_coverage": 0.9641987495886805,
+      "Mean_late_days_among_late": 7.552484242028485,
+      "Mean_promised_days": 18.229771344658303
+    },
+    {
+      "model": "olist_promise",
+      "MAE_days": 13.158136797252995,
+      "RMSE_days": 15.79441250307717,
+      "MedianAE_days": 12.141759259259258,
+      "Mean_late_days_all_orders": 0.3065064173461056,
+      "Late_order_share": 0.055742020401447843,
+      "On_time_coverage": 0.9442579795985522,
+      "Mean_late_days_among_late": 5.498659990052035,
+      "Mean_promised_days": 21.257892579338964
+    }
+  ],
+  "custom_metric": {
+    "name": "mean_late_delivery_days",
+    "formula": "mean(max(actual_days - predicted_days, 0))",
+    "denominator": "all test orders"
+  }
+}
