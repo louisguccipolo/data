@@ -3,7 +3,7 @@ DC := docker compose
 -include .env
 export
 
-.PHONY: env up down nuke ps seed tick run dbt psql-source psql-dwh psql-analyst ch logs
+.PHONY: env up down nuke ps data seed tick run dbt psql-source psql-dwh psql-analyst ch logs
 
 env:            ## сгенерировать .env со случайными паролями (если его нет)
 	@test -f .env || ./scripts/gen_env.sh
@@ -21,8 +21,11 @@ nuke:           ## снести всё вместе с данными
 ps:
 	$(DC) ps
 
-seed:           ## залить историю в OLTP (пустая база)
-	$(DC) exec airflow python /opt/project/oltp/seed.py init
+data:           ## скачать CSV Olist
+	./scripts/download_data.sh
+
+seed: data      ## залить CSV Olist в source.raw (идемпотентно, TRUNCATE+COPY)
+	$(DC) exec airflow python /opt/project/scripts/load_raw.py
 
 tick:           ## один "тик" живого трафика
 	$(DC) exec airflow python /opt/project/oltp/seed.py tick
