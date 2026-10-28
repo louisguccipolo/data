@@ -3,6 +3,7 @@ version: "1.0.0"
 config-version: 2
 profile: marketplace
 
+seed-paths: ["seeds"]
 model-paths: ["models"]
 snapshot-paths: ["snapshots"]
 macro-paths: ["macros"]
@@ -11,8 +12,19 @@ test-paths: ["tests"]
 packages-install-path: "{{ env_var('DBT_PACKAGES_INSTALL_PATH', 'dbt_packages') }}"
 
 vars:
+  as_of_dts: null
   pii_salt: "{{ env_var('PII_SALT', 'dev-salt') }}"
 
 snapshots:
   marketplace:
     +schema: snapshots
+
+models:
+  marketplace:
+    dds:
+      +schema: dds
+      +materialized: table
+
+seeds:
+  marketplace:
+    +schema: dds

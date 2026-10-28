@@ -1,7 +1,7 @@
-"""ELT маркетплейса: source → DWH raw → dbt staging / ODS и тесты.
+"""ELT маркетплейса: source → DWH raw → dbt staging / ODS / DDS и тесты.
 
-Один батч на все таблицы; dbt build подхватывает весь граф моделей.
-DDS / марты / ML / загрузка в ClickHouse — следующие этапы.
+Один батч на все таблицы; dbt build подхватывает seeds и весь граф моделей.
+Марты / ML / загрузка в ClickHouse — следующие этапы.
 """
 
 from datetime import datetime, timedelta, timezone

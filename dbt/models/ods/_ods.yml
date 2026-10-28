@@ -852,3 +852,77 @@ models:
         combination_of_columns:
         - product_category_hk
         - load_dts
+- name: eff_order_profile
+  description: 'История однозначной связи: смена активирует новый линк и деактивирует
+    прежний, включая возвраты.'
+  columns:
+  - name: order_profile_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('link_order_profile')
+          field: order_profile_hk
+  - name: order_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_order')
+          field: order_hk
+  - name: customer_profile_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_customer_profile')
+          field: customer_profile_hk
+  - name: load_dts
+    tests:
+    - not_null
+  - name: is_deleted
+    tests:
+    - not_null
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - order_profile_hk
+        - load_dts
+- name: eff_customer_profile
+  description: 'История однозначной связи: смена активирует новый линк и деактивирует
+    прежний, включая возвраты.'
+  columns:
+  - name: customer_profile_lhk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('link_customer_profile')
+          field: customer_profile_lhk
+  - name: customer_profile_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_customer_profile')
+          field: customer_profile_hk
+  - name: customer_hk
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('hub_customer')
+          field: customer_hk
+  - name: load_dts
+    tests:
+    - not_null
+  - name: is_deleted
+    tests:
+    - not_null
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - customer_profile_lhk
+        - load_dts
