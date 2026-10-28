@@ -1,0 +1,37 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: Версии строк source.raw и полные снимки ключей; загрузка pipelines/source_to_raw.py.
+    loaded_at_field: _extracted_at
+    freshness:
+      warn_after: {count: 26, period: hour}
+      error_after: {count: 50, period: hour}
+    tables:
+      - name: orders
+        description: Заказы и даты смены статусов.
+      - name: order_items
+        description: Позиции заказов, цены и доставка.
+      - name: order_payments
+        description: Способы и суммы оплаты заказов.
+      - name: order_reviews
+        description: Оценки и тексты отзывов покупателей.
+      - name: products
+        description: Товары, категории и физические характеристики.
+      - name: sellers
+        description: Продавцы и их местоположение.
+      - name: customers
+        description: Профили покупателей и адреса заказов.
+      - name: product_category_translation
+        description: Перевод названий категорий на английский.
+      - name: orders__keys
+        description: Полный снимок ключей заказов по батчам.
+      - name: order_items__keys
+        description: Полный снимок составных ключей позиций заказов по батчам.
+      - name: order_reviews__keys
+        description: Полный снимок пар отзыв — заказ по батчам.
+      - name: products__keys
+        description: Полный снимок ключей товаров по батчам.
+      - name: sellers__keys
+        description: Полный снимок ключей продавцов по батчам.
