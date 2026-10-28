@@ -96,7 +96,8 @@ models:
         description: "Постоянный бизнес-ключ товара по product_hk; для Unknown — __unknown__; text."
         tests: [not_null]
       - name: sale_date
-        description: "Дата покупки заказа, date; может быть NULL при неизвестной дате."
+        description: "Дата покупки заказа; date, NOT NULL, часть зерна. Неизвестная дата блокирует сборку."
+        tests: [not_null]
       - name: price
         description: "Цена одной позиции без доставки, numeric(18,2), BRL."
         tests: [not_null]
@@ -115,17 +116,17 @@ models:
         description: "upper(trim(customer_state)) из факта заказа; пустой — __unknown__; text, зерно."
         tests: [unique, not_null]
       - name: state_name
-        description: "Название штата из текущей dim_geo; text, NULL для неизвестного кода вне справочника."
+        description: "Название штата из текущей dim_geo; text, NOT NULL, Unknown при отсутствии названия."
       - name: region
-        description: "Регион из текущей dim_geo; text, NULL для неизвестного кода вне справочника."
+        description: "Регион из текущей dim_geo; text, NOT NULL, Unknown при отсутствии региона."
       - name: orders_count
         description: "Все активные заказы штата любого статуса; bigint, база порога 500."
       - name: delivered_measured_count
         description: "Число доходных заказов с датой доставки; bigint, знаменатель late_share."
       - name: delivery_days_sum
-        description: "Сумма fct_order.to_customer_days по доставленным с датой; numeric без округления."
+        description: "Сумма fct_order.to_customer_days по доставленным с датой; round до 2 знаков, затем numeric(18,2)."
       - name: avg_delivery_days
-        description: "Среднее to_customer_days по доставленным с датой; numeric без округления, NULL при отсутствии измерений."
+        description: "Среднее to_customer_days по доставленным с датой; round до 2 знаков, затем numeric(10,2), NULL при отсутствии измерений."
       - name: late_count
         description: "Число доставленных с датой и is_late; bigint."
       - name: late_share
@@ -145,7 +146,7 @@ models:
       - name: orders_without_items_count
         description: "Число активных заказов статуса с items_count = 0; bigint."
   - name: payments_by_state_year
-    description: "Все активные платежи по штату покупателя на момент заказа и году покупки, без фильтра статуса. При отсутствии активного заказа — Unknown-штат и NULL-год."
+    description: "Все активные платежи по штату покупателя на момент заказа и году покупки, без фильтра статуса. LEFT JOIN сохраняет платежи без активного заказа; неизвестный год блокирует сборку тестом not_null."
     tests:
       - unique:
           column_name: "jsonb_build_array(customer_state, purchase_year)"
@@ -154,7 +155,8 @@ models:
         description: "Нормализованный штат из fct_order как в delivery_by_state; text, часть зерна."
         tests: [not_null]
       - name: purchase_year
-        description: "Год даты покупки заказа; integer, часть зерна, NULL при неизвестной дате."
+        description: "Год даты покупки заказа; integer, NOT NULL, часть зерна. Неизвестная дата блокирует сборку."
+        tests: [not_null]
       - name: payments_count
         description: "Число строк активного fct_payment; bigint."
       - name: payment_amount
@@ -162,7 +164,7 @@ models:
       - name: installments_sum
         description: "Сумма payment_installments, включая нули; bigint."
       - name: avg_installments
-        description: "Среднее payment_installments, включая нули; numeric без округления."
+        description: "Среднее payment_installments, включая нули; round до 2 знаков, затем numeric(10,2)."
       - name: zero_installments_count
         description: "Число платежей с payment_installments = 0; bigint."
   - name: payments_by_type
@@ -178,7 +180,7 @@ models:
       - name: installments_sum
         description: "Сумма payment_installments, включая нули; bigint."
       - name: avg_installments
-        description: "Среднее payment_installments, включая нули; numeric без округления."
+        description: "Среднее payment_installments, включая нули; round до 2 знаков, затем numeric(10,2)."
       - name: zero_installments_count
         description: "Число платежей с payment_installments = 0; bigint."
   - name: review_delivery
@@ -188,13 +190,14 @@ models:
           column_name: "coalesce(review_score, 0)"
     columns:
       - name: review_score
-        description: "Оценка 1–5, integer; отдельная группа NULL, если у последнего отзыва нет оценки; зерно."
+        description: "Оценка 1–5; integer, NOT NULL, зерно. Отсутствие оценки у последнего отзыва блокирует сборку."
+        tests: [not_null]
       - name: orders_count
         description: "Активные заказы с этой оценкой последнего активного отзыва; bigint."
       - name: delivered_measured_count
         description: "Из них доходные заказы с датой доставки; bigint."
       - name: avg_delivery_days
-        description: "Среднее to_customer_days по доставленным с датой; numeric без округления, NULL при отсутствии измерений."
+        description: "Среднее to_customer_days по доставленным с датой; round до 2 знаков, затем numeric(10,2), NULL при отсутствии измерений."
       - name: late_count
         description: "Число доставленных с датой и is_late; bigint."
       - name: late_share

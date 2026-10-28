@@ -76,7 +76,7 @@ ORDER BY batch_id;
 CREATE TABLE IF NOT EXISTS mart.product_price_history
 (
     product_id String,
-    sale_date Nullable(Date),
+    sale_date Date,
     price Decimal(18, 2),
     unit_count UInt64,
     orders_count UInt64,
@@ -84,8 +84,7 @@ CREATE TABLE IF NOT EXISTS mart.product_price_history
     product_unit_count UInt64
 )
 ENGINE = MergeTree
-ORDER BY (product_id, sale_date, price)
-SETTINGS allow_nullable_key = 1;
+ORDER BY (product_id, sale_date, price);
 
 CREATE TABLE IF NOT EXISTS mart.order_status_funnel
 (
@@ -104,7 +103,7 @@ CREATE TABLE IF NOT EXISTS mart.payments_by_type
     payments_count UInt64,
     payment_amount Decimal(18, 2),
     installments_sum UInt64,
-    avg_installments Float64,
+    avg_installments Decimal(10, 2),
     zero_installments_count UInt64
 )
 ENGINE = MergeTree
@@ -113,26 +112,25 @@ ORDER BY payment_type;
 CREATE TABLE IF NOT EXISTS mart.payments_by_state_year
 (
     customer_state String,
-    purchase_year Nullable(Int32),
+    purchase_year Int32,
     payments_count UInt64,
     payment_amount Decimal(18, 2),
     installments_sum UInt64,
-    avg_installments Float64,
+    avg_installments Decimal(10, 2),
     zero_installments_count UInt64
 )
 ENGINE = MergeTree
-ORDER BY (customer_state, purchase_year)
-SETTINGS allow_nullable_key = 1;
+ORDER BY (customer_state, purchase_year);
 
 CREATE TABLE IF NOT EXISTS mart.delivery_by_state
 (
     customer_state String,
-    state_name Nullable(String),
-    region Nullable(String),
+    state_name String,
+    region String,
     orders_count UInt64,
     delivered_measured_count UInt64,
-    delivery_days_sum Decimal(38, 19),
-    avg_delivery_days Nullable(Float64),
+    delivery_days_sum Decimal(18, 2),
+    avg_delivery_days Nullable(Decimal(10, 2)),
     late_count UInt64,
     late_share Nullable(Float64)
 )
@@ -141,13 +139,12 @@ ORDER BY customer_state;
 
 CREATE TABLE IF NOT EXISTS mart.review_delivery
 (
-    review_score Nullable(Int32),
+    review_score Int32,
     orders_count UInt64,
     delivered_measured_count UInt64,
-    avg_delivery_days Nullable(Float64),
+    avg_delivery_days Nullable(Decimal(10, 2)),
     late_count UInt64,
     late_share Nullable(Float64)
 )
 ENGINE = MergeTree
-ORDER BY review_score
-SETTINGS allow_nullable_key = 1;
+ORDER BY review_score;

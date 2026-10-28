@@ -3,7 +3,7 @@ DC := docker compose
 -include .env
 export
 
-.PHONY: env up down nuke ps data seed el run dbt publish psql-source psql-dwh psql-analyst ch logs
+.PHONY: env up down nuke ps data seed el run dbt publish ch-reset-mart psql-source psql-dwh psql-analyst ch logs
 
 env:            ## сгенерировать .env со случайными паролями (если его нет)
 	@test -f .env || ./scripts/gen_env.sh
@@ -50,7 +50,11 @@ ch:
 	$(DC) exec clickhouse clickhouse-client --user etl --password $(CLICKHOUSE_PASSWORD) -d mart
 
 publish:        ## опубликовать проверенные витрины DWH mart в ClickHouse
-	$(DC) exec airflow python -c "from pipelines.mart_to_clickhouse import publish; print(publish('manual'))"
+	$(DC) exec -T airflow python -c "from pipelines.mart_to_clickhouse import publish; print(publish('manual'))"
+
+ch-reset-mart:  ## разовая миграция шлифовки блока Б; после dbt build, без активных DAG/publish
+	$(DC) exec -T clickhouse bash -euc 'for table in product_price_history payments_by_type payments_by_state_year delivery_by_state review_delivery; do for suffix in "" __stg; do clickhouse-client --user "$$CLICKHOUSE_USER" --password "$$CLICKHOUSE_PASSWORD" --query "DROP TABLE IF EXISTS mart.$${table}$${suffix} SYNC"; done; done'
+	$(MAKE) publish
 
 logs:
 	$(DC) logs -f --tail 100 $(S)

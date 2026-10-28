@@ -1155,3 +1155,354 @@ ALL_11_SCHEMA_CONTRACT_PASSED
 
 [exit_code=0]
 ```
+
+
+## Шлифовка блока Б
+
+Приёмка ТЗ `.plans/mart-polish-tz.md` выполнена 28.10.2026 на уже поднятом
+стенде. Пункты **1–6 пройдены**. Все команды dbt выполнялись через
+`docker compose exec -T airflow`. Ни ODS/DDS, ни JOIN, фильтры и зерно витрин
+не изменялись. Superset не добавлялся. Коммит не создавался.
+
+### Изменения и миграция
+
+- `dbt/models/mart/delivery_by_state.sql`: сначала round до 2 знаков, затем
+  numeric(18,2) для суммы дней и numeric(10,2) для среднего. state_name и region
+  получают `coalesce(..., 'Unknown')`.
+- `dbt/models/mart/review_delivery.sql`: среднее дней — round до 2 знаков,
+  затем numeric(10,2).
+- `dbt/models/mart/payments_by_type.sql` и `payments_by_state_year.sql`:
+  avg_installments — round до 2 знаков, затем numeric(10,2).
+- `dbt/models/mart/_mart.yml`: три новых not_null для sale_date, purchase_year,
+  review_score; описания приведены к новому контракту. У новых тестов
+  фактическая severity=ERROR (проверено в manifest.json).
+- `infra/clickhouse/mart.sql`: соответствующие Decimal(18,2) / Decimal(10,2),
+  sale_date Date, purchase_year и review_score Int32 без Nullable;
+  state_name/region String. Удалены все три allow_nullable_key.
+  avg_delivery_days, late_share и order_share остаются Nullable;
+  типы долей Float64 и формулы без округления сохранены.
+- `Makefile`: добавлена `ch-reset-mart`, а `publish` использует exec -T.
+  `pipelines/mart_to_clickhouse.py` менять не потребовалось: проверка схемы,
+  публикация и точная Decimal-сверка выручки прошли с новыми типами.
+
+Разовая процедура для существующего тома:
+
+```sh
+docker compose exec -T airflow bash -c 'cd /opt/project/dbt && dbt build --select mart'
+make ch-reset-mart
+```
+
+Запускать после успешной сборки, без активных DAG и ручных publish. Перед
+миграцией по списку запусков все DAG были завершены. Цель удаляет **только**
+product_price_history, payments_by_type, payments_by_state_year, delivery_by_state,
+review_delivery и соответствующие `__stg` (DROP TABLE IF EXISTS ... SYNC),
+затем вызывает `make publish`: DDL пересоздаёт таблицы, пайплайн проверяет и
+заполняет их. Остальные таблицы и том ClickHouse не удаляются.
+Во время этой разовой миграции пять таблиц недоступны до завершения publish;
+при ошибке после DROP нужно устранить причину и повторить publish. Обычная
+публикация по-прежнему использует staging и EXCHANGE.
+
+Фактический вывод миграции:
+
+```text
+$ make ch-reset-mart
+docker compose exec -T clickhouse bash -euc 'for table in product_price_history payments_by_type payments_by_state_year delivery_by_state review_delivery; do for suffix in "" __stg; do clickhouse-client --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" --query "DROP TABLE IF EXISTS mart.${table}${suffix} SYNC"; done; done'
+make publish
+make[1]: Entering directory '/home/leanleanlean96/warehouse_rwb/marketplace-dwh'
+docker compose exec -T airflow python -c "from pipelines.mart_to_clickhouse import publish; print(publish('manual'))"
+mart.monthly_sales: строк=24; проверки пройдены
+mart.seller_sales: строк=2970; проверки пройдены
+mart.order_summary: строк=1; проверки пройдены
+mart.customer_summary: строк=1; проверки пройдены
+mart.category_sales: строк=74; проверки пройдены
+mart.product_price_history: строк=92686; проверки пройдены
+mart.order_status_funnel: строк=9; проверки пройдены
+mart.payments_by_type: строк=5; проверки пройдены
+mart.payments_by_state_year: строк=75; проверки пройдены
+mart.delivery_by_state: строк=27; проверки пройдены
+mart.review_delivery: строк=5; проверки пройдены
+{'batch_id': 'manual', 'rows': {'monthly_sales': 24, 'seller_sales': 2970, 'order_summary': 1, 'customer_summary': 1, 'category_sales': 74, 'product_price_history': 92686, 'order_status_funnel': 9, 'payments_by_type': 5, 'payments_by_state_year': 75, 'delivery_by_state': 27, 'review_delivery': 5}, 'source_rows': 95877}
+make[1]: Leaving directory '/home/leanleanlean96/warehouse_rwb/marketplace-dwh'
+
+[exit_code=0]
+```
+
+### 1. dbt build --select mart
+
+Команда завершилась с кодом 0: 11 table models + 44 data tests. Ниже строки
+новых тестов и итог из полного лога (ANSI удалены):
+
+```text
+$ docker compose exec -T airflow bash -c 'cd /opt/project/dbt && dbt build --select mart'
+14:11:24  40 of 55 PASS not_null_payments_by_state_year_purchase_year .................... [PASS in 0.17s]
+14:11:24  44 of 55 PASS not_null_review_delivery_review_score ............................ [PASS in 0.11s]
+14:11:24  54 of 55 PASS not_null_product_price_history_sale_date ......................... [PASS in 0.08s]
+14:11:25  Finished running 11 table models, 44 data tests in 0 hours 0 minutes and 3.91 seconds (3.91s).
+14:11:25  Done. PASS=55 WARN=0 ERROR=0 SKIP=0 NO-OP=0 TOTAL=55
+[exit_code=0]
+```
+
+### 2–3. Фактические типы и ключи
+
+Верификатор прочитал information_schema.columns Postgres
+(table_name, column_name, numeric_precision, numeric_scale) и system.columns
+ClickHouse (name, type ORDER BY position). Схемы **всех** целевых и staging-таблиц
+совпали с DDL. Все 73 колонки по именам и порядку совпали с Postgres и _mart.yml.
+Во всех опубликованных витринах нет Decimal(38,...). Для всех шести таблиц
+блока Б проверены типы компонентов зерна без Nullable и SHOW CREATE без
+allow_nullable_key. Фактический вывод, включая SHOW CREATE:
+
+```text
+$ docker compose exec -T airflow python -
+ALL_TARGET_AND_STAGING_SCHEMAS_MATCH_DDL
+ALL_73_COLUMNS_MATCH_PG_YAML_AND_CH_ORDER
+PG delivery_by_state.delivery_days_sum: numeric(18,2)
+PG delivery_by_state.avg_delivery_days: numeric(10,2)
+PG payments_by_state_year.avg_installments: numeric(10,2)
+PG payments_by_type.avg_installments: numeric(10,2)
+PG review_delivery.avg_delivery_days: numeric(10,2)
+NO_DECIMAL_38_IN_PUBLISHED_MARTS
+SHOW CREATE: CREATE TABLE mart.product_price_history
+(
+    `product_id` String,
+    `sale_date` Date,
+    `price` Decimal(18, 2),
+    `unit_count` UInt64,
+    `orders_count` UInt64,
+    `distinct_price_count` UInt64,
+    `product_unit_count` UInt64
+)
+ENGINE = MergeTree
+ORDER BY (product_id, sale_date, price)
+SETTINGS index_granularity = 8192
+SHOW CREATE: CREATE TABLE mart.order_status_funnel
+(
+    `order_status` String,
+    `status_group` String,
+    `orders_count` UInt64,
+    `order_share` Nullable(Float64),
+    `orders_without_items_count` UInt64
+)
+ENGINE = MergeTree
+ORDER BY order_status
+SETTINGS index_granularity = 8192
+SHOW CREATE: CREATE TABLE mart.payments_by_type
+(
+    `payment_type` String,
+    `payments_count` UInt64,
+    `payment_amount` Decimal(18, 2),
+    `installments_sum` UInt64,
+    `avg_installments` Decimal(10, 2),
+    `zero_installments_count` UInt64
+)
+ENGINE = MergeTree
+ORDER BY payment_type
+SETTINGS index_granularity = 8192
+SHOW CREATE: CREATE TABLE mart.payments_by_state_year
+(
+    `customer_state` String,
+    `purchase_year` Int32,
+    `payments_count` UInt64,
+    `payment_amount` Decimal(18, 2),
+    `installments_sum` UInt64,
+    `avg_installments` Decimal(10, 2),
+    `zero_installments_count` UInt64
+)
+ENGINE = MergeTree
+ORDER BY (customer_state, purchase_year)
+SETTINGS index_granularity = 8192
+SHOW CREATE: CREATE TABLE mart.delivery_by_state
+(
+    `customer_state` String,
+    `state_name` String,
+    `region` String,
+    `orders_count` UInt64,
+    `delivered_measured_count` UInt64,
+    `delivery_days_sum` Decimal(18, 2),
+    `avg_delivery_days` Nullable(Decimal(10, 2)),
+    `late_count` UInt64,
+    `late_share` Nullable(Float64)
+)
+ENGINE = MergeTree
+ORDER BY customer_state
+SETTINGS index_granularity = 8192
+SHOW CREATE: CREATE TABLE mart.review_delivery
+(
+    `review_score` Int32,
+    `orders_count` UInt64,
+    `delivered_measured_count` UInt64,
+    `avg_delivery_days` Nullable(Decimal(10, 2)),
+    `late_count` UInt64,
+    `late_share` Nullable(Float64)
+)
+ENGINE = MergeTree
+ORDER BY review_score
+SETTINGS index_granularity = 8192
+BLOCK_B_KEYS_NOT_NULLABLE_AND_NO_ALLOW_NULLABLE_KEY
+```
+
+### 4. Полный DAG, строки и выручка
+
+После ручной публикации запущен реальный DAG через
+`docker compose exec -T airflow airflow dags trigger marketplace_elt --run-id mart_polish_acceptance__20261028T1413`.
+Запуск завершился success в 14:14:02 UTC; все 11 экземпляров задач — success
+с первой попытки. Полный dbt build содержит три прежних предупреждения DDS
+(14 / 166 / 8 строк), ERROR=0; они не относятся к новым not_null.
+
+Фактическое состояние из БД Airflow:
+
+```text
+$ docker compose exec -T airflow-db psql -X -U airflow -d airflow -c 'SELECT run_id,state,start_date,end_date FROM dag_run WHERE run_id='"'"'mart_polish_acceptance__20261028T1413'"'"'; SELECT task_id,map_index,state,try_number FROM task_instance WHERE run_id='"'"'mart_polish_acceptance__20261028T1413'"'"' ORDER BY task_id,map_index;'
+                run_id                 |  state  |          start_date          |           end_date
+---------------------------------------+---------+------------------------------+-------------------------------
+ mart_polish_acceptance__20261028T1413 | success | 2026-10-28 14:12:17.87086+00 | 2026-10-28 14:14:02.251615+00
+(1 row)
+
+      task_id       | map_index |  state  | try_number
+--------------------+-----------+---------+------------
+ dbt_build          |        -1 | success |          1
+ extract_load       |         0 | success |          1
+ extract_load       |         1 | success |          1
+ extract_load       |         2 | success |          1
+ extract_load       |         3 | success |          1
+ extract_load       |         4 | success |          1
+ extract_load       |         5 | success |          1
+ extract_load       |         6 | success |          1
+ extract_load       |         7 | success |          1
+ open_batch         |        -1 | success |          1
+ publish_clickhouse |        -1 | success |          1
+(11 rows)
+
+
+[exit_code=0]
+```
+
+Итоги из логов задач DAG:
+
+```text
+$ docker compose exec -T airflow python -
+TASK: dbt_build
+LOG: /opt/airflow/logs/dag_id=marketplace_elt/run_id=mart_polish_acceptance__20261028T1413/task_id=dbt_build/attempt=1.log
+14:13:51  425 of 491 WARN 14 dds_warn_is_approved_missing ................................ [WARN 14 in 0.17s]
+14:13:51  426 of 491 WARN 166 dds_warn_is_carrier_before_purchase ........................ [WARN 166 in 0.19s]
+14:13:51  427 of 491 WARN 8 dds_warn_is_delivered_without_date ........................... [WARN 8 in 0.12s]
+14:13:57  Finished running 34 incremental models, 3 seeds, 32 table models, 405 data tests, 17 view models in 0 hours 1 minutes and 30.45 seconds (90.45s).
+14:13:57  Done. PASS=488 WARN=3 ERROR=0 SKIP=0 NO-OP=0 TOTAL=491
+Command exited with return code 0
+TASK: publish_clickhouse
+LOG: /opt/airflow/logs/dag_id=marketplace_elt/run_id=mart_polish_acceptance__20261028T1413/task_id=publish_clickhouse/attempt=1.log
+mart.monthly_sales: строк=24; проверки пройдены
+mart.seller_sales: строк=2970; проверки пройдены
+mart.order_summary: строк=1; проверки пройдены
+mart.customer_summary: строк=1; проверки пройдены
+mart.category_sales: строк=74; проверки пройдены
+mart.product_price_history: строк=92686; проверки пройдены
+mart.order_status_funnel: строк=9; проверки пройдены
+mart.payments_by_type: строк=5; проверки пройдены
+mart.payments_by_state_year: строк=75; проверки пройдены
+mart.delivery_by_state: строк=27; проверки пройдены
+mart.review_delivery: строк=5; проверки пройдены
+Done. Returned value was: {'batch_id': 'mart_polish_acceptance__20261028T1413', 'rows': {'monthly_sales': 24, 'seller_sales': 2970, 'order_summary': 1, 'customer_summary': 1, 'category_sales': 74, 'product_price_history': 92686, 'order_status_funnel': 9, 'payments_by_type': 5, 'payments_by_state_year': 75, 'delivery_by_state': 27, 'review_delivery': 5}, 'source_rows': 95877}
+
+[exit_code=0]
+```
+
+После окончания DAG повторно сверены количества **всех 11 витрин** между
+Postgres и ClickHouse и точная выручка четырёх витрин (без Float и допусков).
+Построчно, с сортировкой по зерну, сравнены новые Decimal-метрики всех четырёх
+изменённых SQL-моделей; для delivery_by_state также обе подписи, сумма дней и
+late_share, для review_delivery — late_share. Совпадение точное, включая доли.
+Сумма строк 95 877; refresh_status содержит ровно одну запись этого DAG,
+checks_passed=1. Фактический вывод:
+
+```text
+ROWS monthly_sales: PG=24 CH=24
+ROWS seller_sales: PG=2970 CH=2970
+ROWS order_summary: PG=1 CH=1
+ROWS customer_summary: PG=1 CH=1
+ROWS category_sales: PG=74 CH=74
+ROWS product_price_history: PG=92686 CH=92686
+ROWS order_status_funnel: PG=9 CH=9
+ROWS payments_by_type: PG=5 CH=5
+ROWS payments_by_state_year: PG=75 CH=75
+ROWS delivery_by_state: PG=27 CH=27
+ROWS review_delivery: PG=5 CH=5
+TOTAL_ROWS: 95877
+REVENUE monthly_sales: PG=13221498.11 CH=13221498.11
+REVENUE seller_sales: PG=13221498.11 CH=13221498.11
+REVENUE category_sales: PG=13221498.11 CH=13221498.11
+REVENUE order_summary: PG=13221498.11 CH=13221498.11
+EXACT_PG_CH_VALUES delivery_by_state: PASS (including unrounded shares)
+EXACT_PG_CH_VALUES review_delivery: PASS (including unrounded shares)
+EXACT_PG_CH_VALUES payments_by_type: PASS (including unrounded shares)
+EXACT_PG_CH_VALUES payments_by_state_year: PASS (including unrounded shares)
+STATE_LABEL_NULLS: 0
+REFRESH_STATUS: [('mart_polish_acceptance__20261028T1413', datetime.datetime(2026, 10, 28, 14, 14, 1, 452000), 95877, 1)]
+ACCEPTANCE_CHECKS_PASSED
+
+[exit_code=0]
+```
+
+### 5. Запросы под bi_reader
+
+Оба запроса из ТЗ выполнены после успешного DAG через clickhouse-client
+с `--user bi_reader --password "$CLICKHOUSE_BI_PASSWORD"` (пароль не выводился):
+
+```sql
+select * from mart.review_delivery order by review_score;
+select customer_state, state_name, avg_delivery_days
+from mart.delivery_by_state order by avg_delivery_days desc limit 5;
+select countIf(isNull(state_name) OR isNull(region)) as null_labels
+from mart.delivery_by_state;
+select payment_type, avg_installments from mart.payments_by_type order by payment_type;
+```
+
+Фактический TSVWithNames (средние доставки имеют 2 знака, null_labels=0;
+обычный TSV целые Decimal avg_installments отображает как 1 при типе Decimal(10,2)):
+
+```text
+$ docker compose exec -T clickhouse bash -c 'exec clickhouse-client --user bi_reader --password "$CLICKHOUSE_BI_PASSWORD" --multiquery --format TSVWithNames'
+review_score	orders_count	delivered_measured_count	avg_delivery_days	late_count	late_share
+1	11366	9353	21.32	3432	0.36694108842082757
+2	3129	2919	16.63	550	0.1884206920178143
+3	8133	7916	14.26	694	0.08767054067710965
+4	19044	18894	12.31	649	0.034349528950989736
+5	57001	56742	10.68	1056	0.018610553029501955
+customer_state	state_name	avg_delivery_days
+RR	Roraima	29.39
+AP	Amapá	27.19
+AM	Amazonas	26.43
+AL	Alagoas	24.54
+PA	Pará	23.77
+null_labels
+0
+payment_type	avg_installments
+boleto	1
+credit_card	3.51
+debit_card	1
+not_defined	1
+voucher	1
+
+[exit_code=0]
+```
+
+### 6. Отчёт и артефакты
+
+Этот раздел добавлен **в конец** исходного отчёта; все прежние байты сохранены
+и проверены программно. Предыдущие выводы о Decimal(38,19), Float64 средних и
+Nullable-компонентах зерна описывают прошлую приёмку; текущий контракт приведён
+в разделе «Шлифовка блока Б» выше. Все пять сервисов после приёмки healthy.
+Полные логи и проверочные скрипты: `/tmp/mart-polish-acceptance/`:
+01-dbt-build.log, 02-reset-publish.log, 03-trigger.log, 05-dag-state.log,
+06-verify.log, 07-bi-reader.log, 08-dag-logs.log, 09-health.log;
+verify.py, bi.sql и dag_logs.py. Существенный вывод сохранён здесь и не требует
+сохранности /tmp.
+
+### Вопросы к владельцу
+
+Новых развилок по этому ТЗ нет. Решения владельца из mart-polish-tz.md реализованы
+полностью и закрывают прежние вопросы №2 (точность numeric без typmod) и №3
+(Nullable-зерно блока Б). При неизвестной дате/годе/оценке строки не отбрасываются
+и JOIN не меняется: новые not_null с severity=ERROR блокируют успешный build,
+а зависимая публикация DAG не запускается. Прежние вопросы об имени Compose-проекта
+и будущей метрике Superset этим ТЗ не затрагиваются.

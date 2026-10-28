@@ -12,7 +12,7 @@ with latest_review as (
 )
 select review_score::integer as review_score, count(*)::bigint as orders_count,
     count(*) filter (where measured)::bigint as delivered_measured_count,
-    avg(to_customer_days) filter (where measured)::numeric as avg_delivery_days,
+    round(avg(to_customer_days) filter (where measured), 2)::numeric(10,2) as avg_delivery_days,
     count(*) filter (where measured and is_late)::bigint as late_count,
     (count(*) filter (where measured and is_late)::numeric /
         nullif(count(*) filter (where measured), 0))::double precision as late_share
