@@ -1,7 +1,7 @@
-"""ELT маркетплейса: source → DWH raw → dbt staging / ODS / DDS и тесты.
+"""ELT маркетплейса: source → DWH raw → dbt staging / ODS / DDS / mart → ClickHouse.
 
 Один батч на все таблицы; dbt build подхватывает seeds и весь граф моделей.
-Марты / ML / загрузка в ClickHouse — следующие этапы.
+После тестов публикуем витрины и refresh_status. ML и Superset — следующие этапы.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -40,8 +40,15 @@ def marketplace_elt():
 
     dbt_build = BashOperator(task_id="dbt_build", bash_command=f"{DBT} build")
 
+    @task
+    def publish_clickhouse(batch: dict) -> dict:
+        from pipelines.mart_to_clickhouse import publish
+
+        return publish(batch["batch_id"])
+
     batch = open_batch()
     extract_load.partial(batch=batch).expand(table=list(TABLES)) >> dbt_build
+    dbt_build >> publish_clickhouse(batch)
 
 
 marketplace_elt()

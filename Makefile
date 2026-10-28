@@ -3,7 +3,7 @@ DC := docker compose
 -include .env
 export
 
-.PHONY: env up down nuke ps data seed el run dbt psql-source psql-dwh psql-analyst ch logs
+.PHONY: env up down nuke ps data seed el run dbt publish psql-source psql-dwh psql-analyst ch logs
 
 env:            ## сгенерировать .env со случайными паролями (если его нет)
 	@test -f .env || ./scripts/gen_env.sh
@@ -34,7 +34,7 @@ run:            ## запустить ELT целиком
 	$(DC) exec airflow airflow dags unpause marketplace_elt
 	$(DC) exec airflow airflow dags trigger marketplace_elt
 
-dbt:            ## make dbt ARGS="build -s +sales_wide"
+dbt:            ## make dbt ARGS="build" (только полный build, §15 спеки)
 	$(DC) exec airflow bash -c "cd /opt/project/dbt && dbt $(ARGS)"
 
 psql-source:    ## источник (raw организаторов)
@@ -47,7 +47,10 @@ psql-analyst:   ## под ролью аналитика — для демо ра
 	$(DC) run --rm -e PGUSER=analyst_user -e PGPASSWORD=$(DWH_ANALYST_PASSWORD) --entrypoint psql dwh-init
 
 ch:
-	$(DC) exec clickhouse clickhouse-client --user etl --password $(CLICKHOUSE_PASSWORD) -d mp
+	$(DC) exec clickhouse clickhouse-client --user etl --password $(CLICKHOUSE_PASSWORD) -d mart
+
+publish:        ## опубликовать проверенные витрины DWH mart в ClickHouse
+	$(DC) exec airflow python -c "from pipelines.mart_to_clickhouse import publish; print(publish('manual'))"
 
 logs:
 	$(DC) logs -f --tail 100 $(S)

@@ -436,7 +436,9 @@ Olist обещает доставку с огромным запасом (delive
 
 **Обновление ODS:** 13 staging views и 33 таблицы ODS, собственные макросы и 203 теста dbt; baseline `dbt build` — 249/249 PASS. Старые staging-модели заменены моделями Olist; старые OLTP, EL, Cloudberry-макрос и DAG симулятора удалены. Решения и границы применимости — `.plans/ods-implementation.md`.
 
-**Под старую архитектуру, переписать / удалить:** сервис `metabase` (→ Superset), `pipelines/mart_to_clickhouse.py` (база `mp` и Cloudberry в докстринге → `mart`), оставшиеся ссылки на `mp` в compose/Makefile перед публикацией витрин.
+**Под старую архитектуру, переписать / удалить:** сервис `metabase` (→ Superset).
+
+- [x] ClickHouse: публикация всех 11 витрин `mart` (блоки А и Б), DDL в `infra/clickhouse/mart.sql`, проверки всего комплекта до EXCHANGE, `refresh_status` последним, пользователь `bi_reader`, задача `publish_clickhouse` после полного `dbt build`. Приёмка — `.plans/clickhouse-publish-implementation.md`.
 
 ## 20. Следующие шаги
 
@@ -446,7 +448,7 @@ Olist обещает доставку с огромным запасом (delive
 - [x] dbt: sources на `raw`, макросы `hash_key` / `hub` / `link` / `safe_cast`, staging, `ods` и `err_cast` (28.10; результаты и ограничения upstream — `.plans/ods-implementation.md`).
 - [ ] `dds`, тесты и сверки.
 - [ ] `mart`: пять витрин дашборда + `refresh_status` (§8) = ответы блока А; тесты dbt на контрольные цифры §9, зерно (24 месяца, 74 категории, 1 строка summary), сходимость выручки месяцы = продавцы = категории = итог.
-- [ ] ClickHouse: DDL базы `mart` (витрины + `__stg`) в `infra/clickhouse/init`, `mart_to_clickhouse.py` на базу `mart` и список витрин, пользователь `bi_reader`.
+- [x] ClickHouse: DDL базы `mart` в `infra/clickhouse/mart.sql`, 11 витрин + `refresh_status`, `__stg` из целевых таблиц; публикация после проверок в `publish_clickhouse`, пользователь `bi_reader` (28.10; `.plans/clickhouse-publish-implementation.md`).
 - [ ] Superset: сервис в compose вместо `metabase` (Dockerfile с `clickhouse-connect`, порт 18088), подключение к ClickHouse, датасеты, метрики, дашборд (аналитик); экспорт дашборда и датасетов в репозиторий, чтобы поднимался с нуля.
 - [ ] Приёмка по чек-листу аналитика (§9 `superset-guide.md`): повторный запуск DAG не удваивает, неудачная загрузка оставляет прошлый комплект.
 - [ ] Удалить остатки старой архитектуры (§19).
