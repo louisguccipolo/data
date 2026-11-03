@@ -1,0 +1,1 @@
+select order_id, order_status from {{ ref('stg_orders') }} where order_status is null or order_status not in ('created','approved','invoiced','processing','shipped','delivered','unavailable','canceled')

@@ -1,0 +1,27 @@
+.env
+data/
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+logs/
+__pycache__/
+*.pyc
+.venv/
+dbt/.user.yml
+
+.ipynb_checkpoints/
+
+# Generated artifacts of historical experiments
+models/delivery_eta/*.cbm
+reports/delivery_eta/*.parquet
+
+.DS_Store
+.idea/
+
+# Local agent state and draft plans; tracked documentation remains tracked.
+.context/
+.gstack/
+.agents/
+.codex/
+.aws/
+.plans/

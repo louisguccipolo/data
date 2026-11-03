@@ -1,0 +1,9 @@
+<!-- Даёт ETL-пользователю право использовать named collection dwh (креды к Postgres DWH). -->
+<clickhouse>
+    <users>
+        <etl>
+            <named_collection_control>1</named_collection_control>
+            <show_named_collections>1</show_named_collections>
+        </etl>
+    </users>
+</clickhouse>

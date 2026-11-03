@@ -1,0 +1,28 @@
+name: marketplace
+version: "1.0.0"
+config-version: 2
+profile: marketplace
+
+seed-paths: ["seeds"]
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+# В контейнере пакеты лежат вне bind-mount репозитория.
+packages-install-path: "{{ env_var('DBT_PACKAGES_INSTALL_PATH', 'dbt_packages') }}"
+
+vars:
+  as_of_dts: null
+  pii_salt: "{{ env_var('PII_SALT', 'dev-salt') }}"
+
+models:
+  marketplace:
+    dds:
+      +schema: dds
+      +materialized: table
+    mart:
+      +schema: mart
+      +materialized: table
+
+seeds:
+  marketplace:
+    +schema: dds

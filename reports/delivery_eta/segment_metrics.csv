@@ -1,0 +1,11 @@
+group,segment,model,orders,MAE,p90_coverage
+pair_history_group,1–4 past deliveries,catboost_p50,3252,3.2785583085019785,0.9621771217712177
+pair_history_group,1–4 past deliveries,pair_prior,3252,4.969542883257107,0.9621771217712177
+pair_history_group,5+ past deliveries,catboost_p50,3153,2.987494008418127,0.9613066920393276
+pair_history_group,5+ past deliveries,pair_prior,3153,4.4417331418489185,0.9613066920393276
+pair_history_group,no history,catboost_p50,8790,3.3891533054643608,0.9659840728100114
+pair_history_group,no history,pair_prior,8790,5.101761073836843,0.9659840728100114
+seller_history_group,new seller,catboost_p50,723,3.160792616050402,0.979253112033195
+seller_history_group,new seller,pair_prior,723,5.127051282995679,0.979253112033195
+seller_history_group,seller with history,catboost_p50,14472,3.2882009895949476,0.9634466556108348
+seller_history_group,seller with history,pair_prior,14472,4.926987272942354,0.9634466556108348
