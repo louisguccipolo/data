@@ -1,10 +1,12 @@
 """ELT маркетплейса: source → DWH raw → dbt staging / ODS / DDS / mart → ClickHouse.
 
 Один батч на все таблицы; dbt build подхватывает seeds и весь граф моделей.
+Время истории — logical_date; для ручного запуска без неё — run_after.
+Повтор задачи сохраняет дату батча. Прошлые даты требуют отдельного replay.
 После тестов публикуем витрины и refresh_status. ML и Superset — следующие этапы.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import dag, get_current_context, task
@@ -25,10 +27,20 @@ DBT = "cd /opt/project/dbt && dbt"
 def marketplace_elt():
     @task
     def open_batch() -> dict:
-        return {
-            "batch_id": get_current_context()["run_id"],
-            "extracted_at": datetime.now(timezone.utc).isoformat(),
-        }
+        import os
+        import psycopg2
+        from contextlib import closing
+        from airflow.exceptions import AirflowFailException
+        from pipelines.batch_time import airflow_batch, check_batch_order
+
+        try:
+            batch = airflow_batch(get_current_context())
+            with closing(psycopg2.connect(os.environ["DWH_DSN"])) as conn:
+                conn.set_session(readonly=True)
+                check_batch_order(conn, batch)
+        except ValueError as exc:
+            raise AirflowFailException(str(exc)) from exc
+        return batch
 
     @task
     def extract_load(table: str, batch: dict) -> dict:

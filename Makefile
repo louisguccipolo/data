@@ -43,7 +43,7 @@ psql-source:    ## источник (raw организаторов)
 psql-dwh:       ## владелец DWH
 	$(DC) run --rm --entrypoint psql dwh-init
 
-psql-analyst:   ## под ролью аналитика — для демо разграничения PII
+psql-analyst:   ## под ролью аналитика — доступ к ods/dds/mart/ml без raw
 	$(DC) run --rm -e PGUSER=analyst_user -e PGPASSWORD=$(DWH_ANALYST_PASSWORD) --entrypoint psql dwh-init
 
 ch:
@@ -58,7 +58,3 @@ ch-reset-mart:  ## разовая миграция шлифовки блока �
 
 logs:
 	$(DC) logs -f --tail 100 $(S)
-
-.PHONY: ml-marts
-ml-marts:       ## собрать Parquet для ML-ноутбуков без DWH
-	.venv/bin/python marts/build.py

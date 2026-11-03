@@ -8,8 +8,7 @@ RUN pip install --no-cache-dir \
     --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt" \
     "apache-airflow==${AIRFLOW_VERSION}" \
     apache-airflow-providers-postgres \
-    clickhouse-connect \
-    faker
+    clickhouse-connect
 
 # dbt живёт в отдельном venv: его зависимости конфликтуют с constraints Airflow.
 USER root

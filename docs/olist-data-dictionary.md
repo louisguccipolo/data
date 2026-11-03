@@ -1,6 +1,13 @@
 # Словарь данных Olist
 
-Описание 9 таблиц из [`datasets/`](../datasets): что хранит каждая таблица, её столбцы, типы данных, ключи (PK/FK) и найденные особенности данных.
+Справочное описание исходных CSV Olist: столбцы, ключи и особенности данных.
+Рабочий пайплайн загружает восемь файлов через `make seed`; их версия закреплена
+в [`scripts/olist.sha256`](../scripts/olist.sha256), схема источника —
+[`source/init/02_raw_ddl.sql`](../source/init/02_raw_ddl.sql).
+
+Раздел о девятом файле геолокации сохранён как историческая справка: этот файл
+не входит в текущий ELT. Приведённые pandas-типы — описание прежнего исследования,
+а не отдельные правила подготовки витрин. Исполняемые преобразования находятся в dbt.
 
 Все выводы сделаны по самим CSV-файлам: проверены уникальность ключей, пропуски, диапазоны значений и ссылочная целостность между таблицами.
 
@@ -221,27 +228,3 @@ order_reviews ──(order_id)──► orders ◄──(order_id)── order_i
 - 31 точка лежит за пределами Бразилии (широта до 45°, долгота от −101° до 121°): это ошибки координат.
 
 ---
-
-## Рекомендации по чтению в pandas
-
-```python
-import pandas as pd
-
-zip_cols = {
-    "customer_zip_code_prefix": "string",
-    "seller_zip_code_prefix": "string",
-    "geolocation_zip_code_prefix": "string",
-}
-
-orders = pd.read_csv(
-    "datasets/olist_orders_dataset.csv",
-    parse_dates=[
-        "order_purchase_timestamp", "order_approved_at",
-        "order_delivered_carrier_date", "order_delivered_customer_date",
-        "order_estimated_delivery_date",
-    ],
-)
-customers = pd.read_csv("datasets/olist_customers_dataset.csv", dtype=zip_cols)
-customers["customer_zip_code_prefix"] = customers["customer_zip_code_prefix"].str.zfill(5)
-translation = pd.read_csv("datasets/product_category_name_translation.csv", encoding="utf-8-sig")
-```
